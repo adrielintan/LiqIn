@@ -644,20 +644,126 @@ document.querySelector("#passwordForm").addEventListener("submit", async event =
   }
   message.hidden = false;
 });
-document.querySelector("#exportDataButton").addEventListener("click", () => {
-  const backup = { version: 1, exportedAt: new Date().toISOString(), items, groups: fieldDefinitions };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `liqin-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
-  URL.revokeObjectURL(link.href);
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(binary);
+}
+function base64ToBytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+function zipStore(entries) {
+  const encoder = new TextEncoder();
+  const local = [], central = [];
+  let offset = 0;
+  entries.forEach(entry => {
+    const name = encoder.encode(entry.name);
+    const data = entry.data;
+    const checksum = crc32(data);
+    const header = new Uint8Array(30 + name.length);
+    const view = new DataView(header.buffer);
+    view.setUint32(0, 0x04034b50, true); view.setUint16(4, 20, true); view.setUint16(6, 0x800, true);
+    view.setUint32(14, checksum, true); view.setUint32(18, data.length, true); view.setUint32(22, data.length, true); view.setUint16(26, name.length, true);
+    header.set(name, 30); local.push(header, data);
+    const directory = new Uint8Array(46 + name.length);
+    const directoryView = new DataView(directory.buffer);
+    directoryView.setUint32(0, 0x02014b50, true); directoryView.setUint16(4, 20, true); directoryView.setUint16(6, 20, true); directoryView.setUint16(8, 0x800, true);
+    directoryView.setUint32(16, checksum, true); directoryView.setUint32(20, data.length, true); directoryView.setUint32(24, data.length, true); directoryView.setUint16(28, name.length, true); directoryView.setUint32(42, offset, true);
+    directory.set(name, 46); central.push(directory); offset += header.length + data.length;
+  });
+  const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22); const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true); endView.setUint16(8, entries.length, true); endView.setUint16(10, entries.length, true); endView.setUint32(12, centralSize, true); endView.setUint32(16, offset, true);
+  return new Blob([...local, ...central, end], { type: "application/zip" });
+}
+async function fileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Unable to read a backup photo."));
+    reader.readAsDataURL(file);
+  });
+}
+async function createBackup(includePhotos) {
+  const backup = { version: 1, exportedAt: new Date().toISOString(), items: items.map(item => ({ ...item })), groups: fieldDefinitions };
+  if (!includePhotos) return { backup, entries: [] };
+  const entries = [];
+  for (const [index, item] of backup.items.entries()) {
+    const source = item.originalImage || item.image;
+    if (!source) continue;
+    try {
+      const dataUrl = source.startsWith("data:image/") ? source : await fileAsDataUrl(await (await fetch(source, { credentials: "same-origin" })).blob());
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) continue;
+      const extension = match[1].split("/")[1] || "jpg";
+      item.originalImage = `photos/${index}.${extension}`;
+      item.image = item.originalImage;
+      item.thumbnail = item.originalImage;
+      backup.items[index] = item;
+      entries.push({ name: item.originalImage, data: base64ToBytes(match[2]) });
+    } catch { /* Skip unavailable image URLs but keep the item data. */ }
+  }
+  return { backup, entries };
+}
+async function readZip(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const decoder = new TextDecoder();
+  const files = new Map();
+  let offset = 0;
+  while (offset + 30 <= bytes.length && new DataView(bytes.buffer).getUint32(offset, true) === 0x04034b50) {
+    const view = new DataView(bytes.buffer);
+    const flags = view.getUint16(offset + 6, true);
+    const method = view.getUint16(offset + 8, true);
+    const compressedSize = view.getUint32(offset + 18, true);
+    const nameLength = view.getUint16(offset + 26, true);
+    const extraLength = view.getUint16(offset + 28, true);
+    if (flags & 8 || method !== 0) throw new Error("This ZIP backup uses an unsupported compression format.");
+    const nameStart = offset + 30;
+    const name = decoder.decode(bytes.subarray(nameStart, nameStart + nameLength));
+    const dataStart = nameStart + nameLength + extraLength;
+    files.set(name, bytes.slice(dataStart, dataStart + compressedSize));
+    offset = dataStart + compressedSize;
+  }
+  return files;
+}
+async function downloadBackup(blob, filename) {
+  const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href);
+}
+document.querySelector("#exportJsonButton").addEventListener("click", async () => {
+  const { backup } = await createBackup(false);
+  await downloadBackup(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }), `liqin-backup-${new Date().toISOString().slice(0, 10)}.json`);
+});
+document.querySelector("#exportZipButton").addEventListener("click", async () => {
+  const { backup, entries } = await createBackup(true);
+  entries.unshift({ name: "backup.json", data: new TextEncoder().encode(JSON.stringify(backup, null, 2)) });
+  await downloadBackup(zipStore(entries), `liqin-backup-${new Date().toISOString().slice(0, 10)}.zip`);
 });
 document.querySelector("#importDataInput").addEventListener("change", async event => {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    const backup = JSON.parse(await file.text());
+    let backup;
+    let archiveFiles = new Map();
+    if (file.name.toLowerCase().endsWith(".zip")) {
+      archiveFiles = await readZip(await file.arrayBuffer());
+      const backupData = archiveFiles.get("backup.json");
+      if (!backupData) throw new Error("The ZIP backup does not contain backup.json.");
+      backup = JSON.parse(new TextDecoder().decode(backupData));
+      backup.items.forEach(item => {
+        if (typeof item.originalImage === "string" && archiveFiles.has(item.originalImage)) item.originalImage = `data:image/${item.originalImage.split(".").pop()};base64,${bytesToBase64(archiveFiles.get(item.originalImage))}`;
+      });
+    } else {
+      backup = JSON.parse(await file.text());
+    }
     if (backup.version !== 1 || !Array.isArray(backup.items) || !backup.groups || typeof backup.groups !== "object") throw new Error("This file is not a valid LiqIn backup.");
     if (!backup.items.every(item => item && typeof item.name === "string" && typeof item.group === "string")) throw new Error("The backup contains an invalid item.");
     if (useApiAuth) {

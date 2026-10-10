@@ -36,15 +36,6 @@
       <aside class="sidebar">
         <button type="button" class="sidebar-close" aria-label="Close menu">×</button>
         <div class="brand"><span class="brand-mark">L</span><span>LiqIn</span></div>
-        <div class="profile-menu">
-          <button type="button" class="profile-trigger" id="profileTrigger" aria-expanded="false" aria-controls="profileDropdown">
-            <span class="avatar" id="profileAvatar">AS</span><span class="profile-identity"><strong id="profileName">Alex Smith</strong><small>Admin</small></span><span class="profile-chevron">⌄</span>
-          </button>
-          <div class="profile-dropdown" id="profileDropdown" hidden>
-            <a class="nav-item settings" href="#settings" id="settingsLink"><span class="nav-icon">⚙</span>Settings</a>
-            <button type="button" class="nav-item logout-button" id="logoutButton"><span class="nav-icon">↪</span>Log out</button>
-          </div>
-        </div>
         <nav class="main-nav" aria-label="Main navigation">
           <a class="nav-item active" href="#"><span class="nav-icon">⌂</span>Overview</a>
           <a class="nav-item" href="#groups" id="manageGroupsLink"><span class="nav-icon">◈</span>Groups <span class="nav-count" id="groupCount">6</span></a>
@@ -56,6 +47,15 @@
         <header class="topbar">
           <button class="mobile-menu" aria-label="Open menu">☰</button>
           <div class="breadcrumbs"><span>Inventory</span><span>/</span><strong>All items</strong></div>
+          <div class="profile-menu">
+            <button type="button" class="profile-trigger" id="profileTrigger" aria-expanded="false" aria-controls="profileDropdown">
+              <span class="avatar" id="profileAvatar">AS</span><span class="profile-identity"><strong id="profileName">Alex Smith</strong><small>Admin</small></span><span class="profile-chevron">⌄</span>
+            </button>
+            <div class="profile-dropdown" id="profileDropdown" hidden>
+              <a class="nav-item settings" href="#settings" id="settingsLink"><span class="nav-icon">⚙</span>Settings</a>
+              <button type="button" class="nav-item logout-button" id="logoutButton"><span class="nav-icon">↪</span>Log out</button>
+            </div>
+          </div>
         </header>
 
         <section class="page-heading">
@@ -70,7 +70,7 @@
           <div class="section-toolbar">
             <div><h2>All items <span class="item-total" id="itemTotalLabel">24</span></h2><p>Browse and manage your collection</p></div>
             <div class="toolbar-controls">
-              <label class="search"><span>⌕</span><input id="searchInput" type="search" placeholder="Search your collection..." /></label>
+              <label class="search"><span>⌕</span><span class="barcode-search-icon" title="Barcode search">▥</span><input id="searchInput" type="search" placeholder="Search name, group, or barcode..." /></label>
               <button class="filter-button" id="filterButton">Filter <span>⌄</span></button>
               <div class="view-toggle"><button class="view-active" data-view="grid" aria-label="Grid view">▦</button><button data-view="list" aria-label="List view">☷</button></div>
             </div>
@@ -144,7 +144,7 @@
         <button class="close-button" id="closeSettingsModal" aria-label="Close">×</button>
         <div class="modal-header"><p class="eyebrow">Workspace tools</p><h2 id="settingsTitle">Settings<span class="accent-dot">.</span></h2><p>Back up your collection or restore it on another browser.</p></div>
         <div class="settings-section"><strong>Change password</strong><p>Use your current password to set a new one for this local account.</p><form id="passwordForm" class="password-form"><label class="field"><span>Current password</span><input name="currentPassword" type="password" autocomplete="current-password" minlength="8" required></label><label class="field"><span>New password</span><input name="newPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="field"><span>Confirm new password</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><p class="password-message" id="passwordMessage" role="status" hidden></p><button class="secondary-button" type="submit">Update password</button></form></div>
-        <div class="settings-section"><strong>Collection backup</strong><p>Export items, groups, and custom field values as one JSON file.</p><div class="settings-actions"><button class="secondary-button" id="exportDataButton">↓ Export backup</button><label class="secondary-button file-button" for="importDataInput">↑ Import backup<input id="importDataInput" type="file" accept="application/json,.json"></label></div></div>
+        <div class="settings-section"><strong>Collection backup</strong><p>Export or restore your collection as JSON, or include photos in a ZIP archive.</p><div class="settings-actions"><button class="secondary-button" id="exportJsonButton">↓ Export JSON</button><button class="secondary-button" id="exportZipButton">↓ Export ZIP + photos</button><label class="secondary-button file-button" for="importDataInput">↑ Import JSON/ZIP<input id="importDataInput" type="file" accept="application/json,.json,application/zip,.zip"></label></div></div>
         <div class="settings-section danger-section"><strong>Clear inventory</strong><p>Delete all groups, items, and uploaded images from this inventory. Your account remains active.</p><button class="danger-button" id="resetDataButton">Clear inventory</button></div>
       </section>
     </div>
