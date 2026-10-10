@@ -1,61 +1,325 @@
-"# LiqIn" 
+# LiqIn
 
-A lightweight liquor inventory dashboard prototype.
+LiqIn is a self-hosted liquor inventory application. It provides a dashboard for
+items such as whiskey, wine, gin, rum, and tequila, with user-defined groups,
+custom fields, photos, thumbnails, filtering, and grid/list views.
 
-## Run locally
+## Features
 
-Open [index.html](./index.html) in a browser. No build step or package installation is required.
+- User registration, username/email login, logout, and password changes.
+- Empty inventory for every new user and new installation.
+- Groups with custom fields:
+  - Text, year, date, decimal, currency, single-option, and multiple-option fields.
+  - Configurable decimal precision.
+  - Currency values with selectable currencies and fixed two-decimal precision.
+  - Dashboard visibility and drag-and-drop field ordering.
+- Item management with quantities, custom values, photos, and generated thumbnails.
+- Search, group tabs, stock/photo filters, sorting, and grid/list views.
+- JSON backup export and import.
+- PostgreSQL for application data.
+- Local filesystem storage for uploaded originals and thumbnails.
+- Docker Compose deployment for the application and PostgreSQL.
 
-## Included in this first slice
+## Architecture
 
-- Responsive dashboard with a bottle grid, search, group tabs, summary cards, and collection value.
-- Add-item modal with group-specific fields for whiskey, wine, gin, rum, and tequila.
-- Client-side image selection with a thumbnail preview before the item is added.
-- Browser-local persistence for items and custom groups, so prototype data survives refreshes.
-- New installations start with an empty dashboard; the Settings clear action removes all inventory data instead of restoring sample data.
-- A group builder supporting custom field types including text, year, date, currency, integer, decimal, single option, and multiple options."
-- Group management with edit, rename, and safe deletion for empty groups.
-- Group creation is opened separately from the group manager using the Add Group action below the group list.
-- Structured option chips replace comma-separated option entry; multiple-option fields render as selectable checkbox groups.
-- Photo selection resets between item forms and revokes temporary preview URLs to avoid showing a previous upload."
-- The field builder's Add field action stays below the current field list, and previews use generated data URLs for reliable display."
-- Dashboard filters support group, stock level, photo availability, and sorting.
-- Inventory cards can switch between responsive grid and compact list views."
-- Numeric field types omit whole number fields, support configurable decimal precision, and hide browser number steppers.
-- Currency fields always use two decimal places and let each item select a currency such as USD, EUR, or IDR."
-- Group fields are hidden from dashboard cards by default and can be enabled individually; enabled values appear in the configured field order.
-- Field order can be changed by dragging fields in the group builder.
-- Item details with custom field values, edit/delete actions, and browser-generated image thumbnails."
-- JSON backup and restore controls in Settings for moving prototype data between browsers."
-- Local registration and login gate the dashboard; passwords are stored only as Web Crypto hashes and sessions use session storage.
-- Registration uses a username and email address; sign-in accepts either the username or email address.
-- Signed-in users can change their password from Settings by confirming their current password and the new password.
-- Production foundation includes a TypeScript API, PostgreSQL schema, Docker Compose services, and a persistent filesystem upload volume.
+The production deployment contains two services:
 
-## Production self-hosting
+- **app** — Node.js, TypeScript, Express API, and the static frontend.
+- **db** — PostgreSQL.
 
-The production foundation uses Node.js, TypeScript, PostgreSQL, Docker Compose, and the local server filesystem for uploaded originals and thumbnails. Copy `.env.example` to `.env` and set at least `POSTGRES_PASSWORD` before starting:
+PostgreSQL stores users, sessions, groups, field definitions, items, and image
+metadata. Uploaded image files are stored in the persistent `liqin_uploads`
+Docker volume. Images are converted to JPEG originals and thumbnails, and image
+routes require authentication and ownership.
 
-```text
-copy .env.example .env
-docker compose up --build
-```
+The application has two modes:
 
-Configuration is supplied through `.env`, including the application port (`APP_PORT`), API port (`PORT`), PostgreSQL port (`DB_PORT`), database credentials, upload directory, session settings, and maximum upload size. Never commit `.env`.
+- **Production/HTTP mode** — the frontend uses the API and PostgreSQL.
+- **Direct `file://` mode** — the frontend runs as a browser-local prototype
+  using `localStorage` and `sessionStorage`.
 
-PostgreSQL stores users, sessions, groups, field definitions, items, and image metadata. The image files live in the `liqin_uploads` Docker volume and are referenced by paths in `item_images`. Uploaded images are converted to JPEG originals and 480px thumbnails, then served only to the owning authenticated user.
+## Production installation with Docker Compose
 
-The database initialization script runs only when the PostgreSQL volume is created. Back up both the database volume and the upload volume. New database volumes contain no sample groups or items.
+### Prerequisites
 
-The container-served UI uses the API for authentication, group and item CRUD, image upload, and JSON backup import. Opening `index.html` directly with `file://` continues to use the browser-local prototype fallback. An API import replaces the signed-in user's groups and items, then sends embedded images through the normal filesystem upload pipeline. API JSON requests are limited to 25 MB; individual images follow `MAX_UPLOAD_BYTES`.
-- Authentication is isolated so a future OIDC provider can replace the local provider without changing inventory workflows.
+Install and start:
 
-The current schema assigns groups to users. For an existing development database created by an earlier scaffold, use a database migration before starting the updated API; a newly created PostgreSQL volume applies the current schema automatically.
+- Docker Desktop on Windows or macOS, or Docker Engine and Compose on Linux.
+- Git.
 
-For an existing Compose database volume, apply pending migrations before restarting the app, for example:
+Verify the installation:
 
 ```powershell
-Get-Content db/002_add_group_field_placeholder.sql | docker compose exec -T db psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB
+docker version
+docker compose version
 ```
 
-For a new production installation, the numbered SQL files in `db/` run automatically during PostgreSQL initialization.
+### 1. Download the application
+
+```powershell
+git clone https://github.com/adrielintan/LiqIn.git
+Set-Location LiqIn
+```
+
+If the repository is already present:
+
+```powershell
+git pull
+```
+
+### 2. Create the environment file
+
+Copy the example file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and replace `POSTGRES_PASSWORD` with a long, unique password.
+Update the password in `DATABASE_URL` to the same value:
+
+```text
+POSTGRES_USER=liqin
+POSTGRES_PASSWORD=replace-with-your-real-password
+DATABASE_URL=postgresql://liqin:replace-with-your-real-password@db:5432/liqin
+```
+
+At minimum, review these settings:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `APP_PORT` | Host port exposed for the web application | `3000` |
+| `PORT` | Port used inside the app container | `3000` |
+| `DB_PORT` | Host port exposed for PostgreSQL | `5432` |
+| `POSTGRES_DB` | PostgreSQL database name | `liqin` |
+| `POSTGRES_USER` | PostgreSQL username | `liqin` |
+| `POSTGRES_PASSWORD` | PostgreSQL password | Must be changed |
+| `DATABASE_URL` | App-to-database connection URL | Must match credentials |
+| `SESSION_TTL_DAYS` | Session lifetime | `30` |
+| `MAX_UPLOAD_BYTES` | Maximum image size | `10485760` |
+
+Never commit `.env`. It is ignored by Git.
+
+### 3. Validate and start the stack
+
+Validate the expanded Compose configuration:
+
+```powershell
+docker compose config
+```
+
+Build and start in the background:
+
+```powershell
+docker compose up --build -d
+```
+
+Open the application at:
+
+```text
+http://localhost:3000
+```
+
+The exact URL uses the configured `APP_PORT`.
+
+### 4. Verify the installation
+
+Check the containers:
+
+```powershell
+docker compose ps
+```
+
+Check application health:
+
+```powershell
+curl.exe http://localhost:3000/health
+curl.exe http://localhost:3000/ready
+```
+
+Expected responses:
+
+```json
+{"status":"ok","database":"ok"}
+{"status":"ready"}
+```
+
+Register the first user through the web interface. The dashboard will be empty
+until groups and items are added.
+
+## Operating the deployment
+
+View logs:
+
+```powershell
+docker compose logs -f app
+docker compose logs -f db
+```
+
+Restart services:
+
+```powershell
+docker compose restart
+```
+
+Stop services without deleting data:
+
+```powershell
+docker compose down
+```
+
+Update to a newer version:
+
+```powershell
+git pull
+docker compose up --build -d
+```
+
+Do not use `docker compose down -v` unless you intentionally want to delete the
+database and upload volumes.
+
+## Database migrations
+
+For a new installation, numbered SQL files in [`db/`](./db/) run automatically
+when PostgreSQL initializes a new data volume.
+
+For an existing database volume, initialization scripts do not run again. Apply
+new migrations explicitly before restarting the application. For example:
+
+```powershell
+Get-Content db/002_add_group_field_placeholder.sql |
+  docker compose exec -T db psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB
+```
+
+If the environment variables are not loaded into the current PowerShell session,
+use the values from `.env` explicitly:
+
+```powershell
+Get-Content db/002_add_group_field_placeholder.sql |
+  docker compose exec -T db psql -U liqin -d liqin
+```
+
+## Backups and data persistence
+
+The deployment uses two persistent Docker volumes:
+
+- `liqin_db` — PostgreSQL data.
+- `liqin_uploads` — uploaded image files.
+
+Back up both. A database backup without the upload volume will not preserve
+images, and an upload backup without the database will not preserve their
+metadata.
+
+The application also provides JSON backup export/import in Settings. This
+contains groups, items, field definitions, and values. Embedded images are
+uploaded through the authenticated image API during import.
+
+The **Clear inventory** action removes the current user's groups, items, custom
+fields, image metadata, and uploaded image files. It does not delete the user
+account or other users' data.
+
+## HTTPS and production security
+
+For an internet-facing deployment:
+
+1. Put the app behind an HTTPS reverse proxy such as Caddy, Nginx, or Traefik.
+2. Set `NODE_ENV=production`.
+3. Use a long random database password.
+4. Restrict PostgreSQL access to the internal Docker network when possible.
+5. Do not expose port `5432` publicly unless it is explicitly required.
+6. Back up the database and upload volume regularly.
+7. Store `.env` securely and restrict its filesystem permissions.
+
+Production OIDC is intentionally deferred. The authentication boundary is
+isolated so an OIDC provider can be added later without changing inventory
+workflows.
+
+## Local prototype mode
+
+For a dependency-free browser prototype, open [`index.html`](./index.html)
+directly. This mode does not use Docker, PostgreSQL, or the API.
+
+Local prototype data is stored in the browser:
+
+- `localStorage` — inventory, groups, and local users.
+- `sessionStorage` — the current local session.
+
+Use the Settings backup tools to export or import prototype data. The prototype
+also starts empty and its clear action leaves the inventory empty.
+
+## Development commands
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Build the TypeScript API:
+
+```powershell
+npm run build
+```
+
+Start the compiled API:
+
+```powershell
+npm start
+```
+
+Run the development watcher:
+
+```powershell
+npm run dev
+```
+
+## Troubleshooting
+
+### Docker cannot connect to the daemon
+
+Start Docker Desktop or the Docker service, then verify:
+
+```powershell
+docker version
+docker compose version
+```
+
+The client version alone is not sufficient; `docker version` must also show a
+Server section.
+
+### The app cannot connect to PostgreSQL
+
+Check:
+
+```powershell
+docker compose ps
+docker compose logs db
+```
+
+Confirm that `POSTGRES_PASSWORD`, `POSTGRES_USER`, `POSTGRES_DB`, and the
+credentials in `DATABASE_URL` match.
+
+### The database schema is missing a column
+
+This usually means the database volume existed before a migration was added.
+Apply the relevant numbered SQL migration manually as described in
+[Database migrations](#database-migrations).
+
+### Port already in use
+
+Change `APP_PORT` or `DB_PORT` in `.env`, then recreate the stack:
+
+```powershell
+docker compose up --build -d
+```
+
+### Images are missing
+
+Check both the application logs and the upload volume:
+
+```powershell
+docker compose logs app
+docker volume ls
+```
+
+Do not remove `liqin_uploads` if you need to preserve uploaded images.
