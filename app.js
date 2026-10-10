@@ -15,6 +15,19 @@ const useApiAuth = window.location.protocol !== "file:";
 const AUTH_USERS_KEY = "liqin-users";
 const AUTH_SESSION_KEY = "liqin-session";
 
+function createId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  if (typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    return hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
+  }
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function getAuthUsers() {
   return JSON.parse(localStorage.getItem(AUTH_USERS_KEY) || "[]");
 }
@@ -104,7 +117,7 @@ authForm.addEventListener("submit", async event => {
       const normalizedUsername = username.toLowerCase();
       if (users.some(candidate => candidate.email === email)) throw new Error("An account with this email already exists.");
       if (users.some(candidate => candidate.username?.toLowerCase() === normalizedUsername)) throw new Error("That username is already in use.");
-      user = { id: crypto.randomUUID(), username, email, name: username, passwordHash: await hashPassword(password) };
+      user = { id: createId(), username, email, name: username, passwordHash: await hashPassword(password) };
       users.push(user);
       localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
     } else {
@@ -129,7 +142,7 @@ const starterGroups = {};
 const typeLabels = { text: "Text", year: "Year", date: "Date", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
 const currencyOptions = ["USD", "EUR", "GBP", "IDR", "JPY", "AUD", "CAD", "CHF", "CNY", "SGD"];
 const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480'%3E%3Crect width='480' height='480' fill='%23eef0ed'/%3E%3C/svg%3E";
-let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || crypto.randomUUID(), thumbnail: item.thumbnail || item.image || fallbackImage }));
+let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
 let fieldDefinitions = JSON.parse(localStorage.getItem("liqin-groups") || "{}");
 Object.keys(fieldDefinitions).forEach(group => {
   fieldDefinitions[group] = (fieldDefinitions[group] || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }));
@@ -538,7 +551,7 @@ document.querySelector("#importDataInput").addEventListener("change", async even
       closeModal(settingsModal);
       return;
     }
-    items = backup.items.map(item => ({ ...item, id: item.id || crypto.randomUUID(), thumbnail: item.thumbnail || item.image || fallbackImage }));
+    items = backup.items.map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
     fieldDefinitions = backup.groups;
     Object.keys(fieldDefinitions).forEach(group => {
       fieldDefinitions[group] = (fieldDefinitions[group] || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }));
@@ -659,7 +672,7 @@ document.querySelector("#itemForm").addEventListener("submit", async event => {
     let photo = pendingPhoto || {};
     if (file && !photo.thumbnail) photo = await createThumbnail(file);
     const existing = editingItemId && items.find(item => item.id === editingItemId);
-    const updated = { ...(existing || {}), id: existing?.id || crypto.randomUUID(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, price: existing?.price || "—", image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
+    const updated = { ...(existing || {}), id: existing?.id || createId(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, price: existing?.price || "—", image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
     if (useApiAuth) {
       const payload = JSON.stringify({ name: updated.name, group: updated.group, quantity: updated.quantity, values: updated.values });
       const result = existing
