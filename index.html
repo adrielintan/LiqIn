@@ -157,6 +157,7 @@
       <section class="modal barcode-modal" role="dialog" aria-modal="true" aria-labelledby="barcodeTitle">
         <button class="close-button" id="closeBarcodeModal" aria-label="Close">×</button>
         <div class="modal-header"><p class="eyebrow">Barcode scanner</p><h2 id="barcodeTitle">Scan a barcode<span class="accent-dot">.</span></h2><p id="barcodeMessage">Point your camera at the product barcode.</p></div>
+        <label class="field barcode-camera-select"><span>Camera</span><select id="barcodeCameraSelect"><option value="">Default camera</option></select></label>
         <video id="barcodeVideo" autoplay playsinline muted></video>
         <div class="modal-actions"><button type="button" class="secondary-button" id="cancelBarcodeScan">Cancel</button></div>
       </section>

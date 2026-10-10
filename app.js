@@ -280,11 +280,17 @@ function openModal(target) { target.hidden = false; document.body.style.overflow
 let barcodeStream = null;
 let barcodeAnimationFrame = null;
 let barcodeFieldName = null;
+let barcodeDetector = null;
+let barcodeLastValue = "";
+let barcodeConsecutiveReads = 0;
 function stopBarcodeScanner() {
   if (barcodeAnimationFrame) cancelAnimationFrame(barcodeAnimationFrame);
   barcodeAnimationFrame = null;
   if (barcodeStream) barcodeStream.getTracks().forEach(track => track.stop());
   barcodeStream = null;
+  barcodeDetector = null;
+  barcodeLastValue = "";
+  barcodeConsecutiveReads = 0;
   document.querySelector("#barcodeVideo").srcObject = null;
 }
 function closeModal(target) {
@@ -311,34 +317,30 @@ async function startBarcodeScanner(fieldName) {
     return;
   }
   try {
-    const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"] });
-    barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    barcodeDetector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"] });
     const video = document.querySelector("#barcodeVideo");
-    video.srcObject = barcodeStream;
-    await video.play();
-    const track = barcodeStream.getVideoTracks()[0];
-    const capabilities = track.getCapabilities?.();
-    if (capabilities?.zoom) {
-      await track.applyConstraints({ advanced: [{ zoom: Math.min(capabilities.zoom.max, Math.max(capabilities.zoom.min, 1.5)) }] }).catch(() => {});
-    }
-    let lastValue = "";
-    let consecutiveReads = 0;
+    await switchBarcodeCamera("");
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameraSelect = document.querySelector("#barcodeCameraSelect");
+    cameraSelect.innerHTML = `<option value="">Default camera</option>${devices.filter(device => device.kind === "videoinput").map((device, index) => `<option value="${escapeHtml(device.deviceId)}">${escapeHtml(device.label || `Camera ${index + 1}`)}</option>`).join("")}`;
+    const activeDeviceId = barcodeStream?.getVideoTracks()[0]?.getSettings().deviceId;
+    if (activeDeviceId) cameraSelect.value = activeDeviceId;
     const scan = async () => {
       if (barcodeModal.hidden) return;
       try {
-        const results = await detector.detect(video);
+        const results = await barcodeDetector.detect(video);
         const result = results.find(candidate => candidate.rawValue);
         const value = result?.rawValue?.trim() || "";
         const valid = value && hasValidBarcodeChecksum(value, result.format);
-        if (valid && value === lastValue) consecutiveReads += 1;
+        if (valid && value === barcodeLastValue) barcodeConsecutiveReads += 1;
         else if (valid) {
-          lastValue = value;
-          consecutiveReads = 1;
+          barcodeLastValue = value;
+          barcodeConsecutiveReads = 1;
         } else {
-          lastValue = "";
-          consecutiveReads = 0;
+          barcodeLastValue = "";
+          barcodeConsecutiveReads = 0;
         }
-        if (valid && consecutiveReads >= 3) {
+        if (valid && barcodeConsecutiveReads >= 3) {
           const input = customFields.querySelector(`[name="${CSS.escape(barcodeFieldName)}"]`);
           if (input) input.value = value;
           closeModal(barcodeModal);
@@ -355,6 +357,27 @@ async function startBarcodeScanner(fieldName) {
     message.textContent = "Camera access was unavailable. Enter the barcode manually.";
     stopBarcodeScanner();
   }
+}
+async function switchBarcodeCamera(deviceId) {
+  if (barcodeStream) barcodeStream.getTracks().forEach(track => track.stop());
+  const constraints = {
+    video: deviceId
+      ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: "continuous" }
+      : { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: "continuous" },
+    audio: false
+  };
+  barcodeStream = await navigator.mediaDevices.getUserMedia(constraints);
+  const video = document.querySelector("#barcodeVideo");
+  video.srcObject = barcodeStream;
+  await video.play();
+  const track = barcodeStream.getVideoTracks()[0];
+  const capabilities = track.getCapabilities?.();
+  const advanced = [];
+  if (capabilities?.focusMode?.includes("continuous")) advanced.push({ focusMode: "continuous" });
+  if (capabilities?.zoom) advanced.push({ zoom: Math.min(capabilities.zoom.max, Math.max(capabilities.zoom.min, 1.5)) });
+  if (advanced.length) await track.applyConstraints({ advanced }).catch(() => {});
+  barcodeLastValue = "";
+  barcodeConsecutiveReads = 0;
 }
 function resetPhotoPreview() {
   photoSelectionToken += 1;
@@ -565,6 +588,13 @@ document.querySelector(".main-content").addEventListener("click", event => {
 document.querySelector("#closeDetailModal").addEventListener("click", () => closeModal(detailModal));
 document.querySelector("#closeBarcodeModal").addEventListener("click", () => closeModal(barcodeModal));
 document.querySelector("#cancelBarcodeScan").addEventListener("click", () => closeModal(barcodeModal));
+document.querySelector("#barcodeCameraSelect").addEventListener("change", async event => {
+  try {
+    await switchBarcodeCamera(event.target.value);
+  } catch {
+    document.querySelector("#barcodeMessage").textContent = "Unable to use that camera. Choose another camera or enter the barcode manually.";
+  }
+});
 document.querySelector("#settingsLink").addEventListener("click", event => { event.preventDefault(); openModal(settingsModal); });
 document.querySelector("#closeSettingsModal").addEventListener("click", () => closeModal(settingsModal));
 document.querySelector("#passwordForm").addEventListener("submit", async event => {
