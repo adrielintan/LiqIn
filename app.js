@@ -454,6 +454,12 @@ document.querySelector("#groupList").addEventListener("click", async event => {
 document.querySelector(".mobile-menu").addEventListener("click", () => {
   document.querySelector(".app-shell").classList.toggle("sidebar-open");
 });
+document.querySelector(".sidebar-close").addEventListener("click", () => {
+  document.querySelector(".app-shell").classList.remove("sidebar-open");
+});
+document.querySelector(".main-nav").addEventListener("click", () => {
+  document.querySelector(".app-shell").classList.remove("sidebar-open");
+});
 document.querySelector(".main-content").addEventListener("click", event => {
   if (event.target.closest(".mobile-menu")) return;
   document.querySelector(".app-shell").classList.remove("sidebar-open");
@@ -702,3 +708,24 @@ document.querySelector("#groupForm").addEventListener("submit", async event => {
 renderGroupControls();
 renderItems();
 renderCustomFields();
+async function initializeAuthentication() {
+  if (!useApiAuth) {
+    const signedInUser = getSignedInUser();
+    if (signedInUser) showAuthenticatedApp(signedInUser);
+    else showAuthScreen();
+    return;
+  }
+  try {
+    const result = await apiRequest("/api/auth/me");
+    showAuthenticatedApp(result.user);
+    try {
+      await loadApiInventory();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Unable to load inventory.");
+    }
+  } catch {
+    showAuthScreen();
+  }
+}
+
+initializeAuthentication();
