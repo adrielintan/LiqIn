@@ -49,9 +49,10 @@
           <div class="breadcrumbs"><span>Inventory</span><span>/</span><strong>All items</strong></div>
           <div class="profile-menu">
             <button type="button" class="profile-trigger" id="profileTrigger" aria-expanded="false" aria-controls="profileDropdown">
-              <span class="avatar" id="profileAvatar">AS</span><span class="profile-identity"><strong id="profileName">Alex Smith</strong><small>Admin</small></span><span class="profile-chevron">⌄</span>
+              <span class="avatar" id="profileAvatar">AS</span>
             </button>
             <div class="profile-dropdown" id="profileDropdown" hidden>
+              <div class="profile-dropdown-identity"><strong id="profileName">Alex Smith</strong><small id="profileAccountType">Admin</small></div>
               <a class="nav-item settings" href="#settings" id="settingsLink"><span class="nav-icon">⚙</span>Settings</a>
               <button type="button" class="nav-item logout-button" id="logoutButton"><span class="nav-icon">↪</span>Log out</button>
             </div>
@@ -70,7 +71,7 @@
           <div class="section-toolbar">
             <div><h2>All items <span class="item-total" id="itemTotalLabel">24</span></h2><p>Browse and manage your collection</p></div>
             <div class="toolbar-controls">
-              <label class="search"><span>⌕</span><span class="barcode-search-icon" title="Barcode search">▥</span><input id="searchInput" type="search" placeholder="Search name, group, or barcode..." /></label>
+              <label class="search"><span>⌕</span><input id="searchInput" type="search" placeholder="Search name, group, or barcode..." /><button type="button" class="barcode-search-icon" id="barcodeSearchButton" aria-label="Scan barcode" title="Scan barcode">▥</button></label>
               <button class="filter-button" id="filterButton">Filter <span>⌄</span></button>
               <div class="view-toggle"><button class="view-active" data-view="grid" aria-label="Grid view">▦</button><button data-view="list" aria-label="List view">☷</button></div>
             </div>

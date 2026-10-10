@@ -75,6 +75,7 @@ function showAuthenticatedApp(user) {
   const initials = displayName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   document.querySelector("#profileName").textContent = displayName;
   document.querySelector("#profileAvatar").textContent = initials;
+  document.querySelector("#profileAccountType").textContent = user.accountType || "Admin";
 }
 function showAuthScreen() {
   authScreen.hidden = false;
@@ -338,8 +339,13 @@ async function startBarcodeScanner(fieldName) {
           barcodeConsecutiveReads = 0;
         }
         if (valid && barcodeConsecutiveReads >= 3) {
-          const input = customFields.querySelector(`[name="${CSS.escape(barcodeFieldName)}"]`);
-          if (input) input.value = value;
+          const input = barcodeFieldName
+            ? customFields.querySelector(`[name="${CSS.escape(barcodeFieldName)}"]`)
+            : document.querySelector("#searchInput");
+          if (input) {
+            input.value = value;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          }
           closeModal(barcodeModal);
           return;
         }
@@ -603,6 +609,7 @@ document.querySelector(".main-content").addEventListener("click", event => {
 document.querySelector("#closeDetailModal").addEventListener("click", () => closeModal(detailModal));
 document.querySelector("#closeBarcodeModal").addEventListener("click", () => closeModal(barcodeModal));
 document.querySelector("#cancelBarcodeScan").addEventListener("click", () => closeModal(barcodeModal));
+document.querySelector("#barcodeSearchButton").addEventListener("click", () => startBarcodeScanner(null));
 document.querySelector("#barcodeCameraSelect").addEventListener("change", async event => {
   try {
     await switchBarcodeCamera(event.target.value);
