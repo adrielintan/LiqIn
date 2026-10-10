@@ -9,7 +9,8 @@ custom fields, photos, thumbnails, filtering, and grid/list views.
 - User registration, username/email login, logout, and password changes.
 - Empty inventory for every new user and new installation.
 - Groups with custom fields:
-  - Text, year, date, decimal, currency, single-option, and multiple-option fields.
+  - Text, barcode, year, date, decimal, currency, single-option, and multiple-option fields.
+  - Barcode values support manual entry and camera scanning where the browser provides the Barcode Detection API.
   - Configurable decimal precision.
   - Currency values with selectable currencies and fixed two-decimal precision.
   - Dashboard visibility and drag-and-drop field ordering.

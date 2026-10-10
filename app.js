@@ -139,7 +139,7 @@ document.querySelector("#logoutButton").addEventListener("click", async () => {
 
 const starterItems = [];
 const starterGroups = {};
-const typeLabels = { text: "Text", year: "Year", date: "Date", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
+const typeLabels = { text: "Text", barcode: "Barcode", year: "Year", date: "Date", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
 const currencyOptions = ["USD", "EUR", "GBP", "IDR", "JPY", "AUD", "CAD", "CHF", "CNY", "SGD"];
 const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480'%3E%3Crect width='480' height='480' fill='%23eef0ed'/%3E%3C/svg%3E";
 let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
@@ -167,6 +167,7 @@ const grid = document.querySelector("#inventoryGrid");
 const groupSelect = document.querySelector("#groupSelect");
 const customFields = document.querySelector("#customFields");
 const modal = document.querySelector("#itemModal");
+const barcodeModal = document.querySelector("#barcodeModal");
 const groupModal = document.querySelector("#groupModal");
 const detailModal = document.querySelector("#detailModal");
 const settingsModal = document.querySelector("#settingsModal");
@@ -257,6 +258,7 @@ function renderCustomFields() {
     if (field.type === "single") return `<label class="field"><span>${escapeHtml(field.label)}</span><select name="${escapeHtml(field.name)}">${(field.options || []).map(option => `<option>${escapeHtml(option)}</option>`).join("")}</select></label>`;
     if (field.type === "multiple") return `<fieldset class="field option-field"><legend>${escapeHtml(field.label)}</legend><div class="multi-options">${(field.options || []).map(option => `<label><input type="checkbox" name="${escapeHtml(field.name)}" value="${escapeHtml(option)}"><span>${escapeHtml(option)}</span></label>`).join("")}</div></fieldset>`;
     if (field.type === "currency") return `<div class="field"><span>${escapeHtml(field.label)}</span><div class="currency-input"><select name="${escapeHtml(field.name)}__currency" aria-label="${escapeHtml(field.label)} currency">${currencyOptions.map(currency => `<option>${currency}</option>`).join("")}</select><input name="${escapeHtml(field.name)}" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></div></div>`;
+    if (field.type === "barcode") return `<div class="field"><span>${escapeHtml(field.label)}</span><div class="barcode-input"><input name="${escapeHtml(field.name)}" type="text" inputmode="numeric" autocomplete="off" placeholder="${escapeHtml(field.placeholder || "Scan or enter barcode")}"><button type="button" class="secondary-button scan-barcode" data-field-name="${escapeHtml(field.name)}">Scan</button></div></div>`;
     return `<label class="field"><span>${escapeHtml(field.label)}</span><input name="${escapeHtml(field.name)}" type="${inputType}" inputmode="${inputType === "number" ? "decimal" : ""}" placeholder="${escapeHtml(field.placeholder || "")}" ${numericAttributes}></label>`;
   }).join("");
 }
@@ -275,7 +277,56 @@ function fillCustomFields(values = {}) {
   });
 }
 function openModal(target) { target.hidden = false; document.body.style.overflow = "hidden"; }
-function closeModal(target) { target.hidden = true; if (modal.hidden && detailModal.hidden && groupModal.hidden && createGroupModal.hidden && settingsModal.hidden) document.body.style.overflow = ""; }
+let barcodeStream = null;
+let barcodeAnimationFrame = null;
+let barcodeFieldName = null;
+function stopBarcodeScanner() {
+  if (barcodeAnimationFrame) cancelAnimationFrame(barcodeAnimationFrame);
+  barcodeAnimationFrame = null;
+  if (barcodeStream) barcodeStream.getTracks().forEach(track => track.stop());
+  barcodeStream = null;
+  document.querySelector("#barcodeVideo").srcObject = null;
+}
+function closeModal(target) {
+  target.hidden = true;
+  if (target === barcodeModal) stopBarcodeScanner();
+  if (modal.hidden && detailModal.hidden && groupModal.hidden && createGroupModal.hidden && settingsModal.hidden && barcodeModal.hidden) document.body.style.overflow = "";
+}
+async function startBarcodeScanner(fieldName) {
+  barcodeFieldName = fieldName;
+  openModal(barcodeModal);
+  const message = document.querySelector("#barcodeMessage");
+  if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
+    message.textContent = "Camera scanning is not supported here. Enter the barcode manually.";
+    return;
+  }
+  try {
+    const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"] });
+    barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    const video = document.querySelector("#barcodeVideo");
+    video.srcObject = barcodeStream;
+    await video.play();
+    const scan = async () => {
+      if (barcodeModal.hidden) return;
+      try {
+        const results = await detector.detect(video);
+        if (results[0]?.rawValue) {
+          const input = customFields.querySelector(`[name="${CSS.escape(barcodeFieldName)}"]`);
+          if (input) input.value = results[0].rawValue;
+          closeModal(barcodeModal);
+          return;
+        }
+      } catch {
+        message.textContent = "Unable to read that barcode. Try moving closer or enter it manually.";
+      }
+      barcodeAnimationFrame = requestAnimationFrame(scan);
+    };
+    barcodeAnimationFrame = requestAnimationFrame(scan);
+  } catch {
+    message.textContent = "Camera access was unavailable. Enter the barcode manually.";
+    stopBarcodeScanner();
+  }
+}
 function resetPhotoPreview() {
   photoSelectionToken += 1;
   const photoInput = document.querySelector("#photoInput");
@@ -481,8 +532,10 @@ document.querySelector(".main-content").addEventListener("click", event => {
   if (event.target.closest(".mobile-menu")) return;
   document.querySelector(".app-shell").classList.remove("sidebar-open");
 });
-[modal, detailModal, groupModal, createGroupModal, settingsModal].forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) closeModal(dialog); }));
+[modal, detailModal, groupModal, createGroupModal, settingsModal, barcodeModal].forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) closeModal(dialog); }));
 document.querySelector("#closeDetailModal").addEventListener("click", () => closeModal(detailModal));
+document.querySelector("#closeBarcodeModal").addEventListener("click", () => closeModal(barcodeModal));
+document.querySelector("#cancelBarcodeScan").addEventListener("click", () => closeModal(barcodeModal));
 document.querySelector("#settingsLink").addEventListener("click", event => { event.preventDefault(); openModal(settingsModal); });
 document.querySelector("#closeSettingsModal").addEventListener("click", () => closeModal(settingsModal));
 document.querySelector("#passwordForm").addEventListener("submit", async event => {
@@ -623,6 +676,10 @@ document.querySelector(".view-toggle").addEventListener("click", event => {
   currentView = button.dataset.view;
   document.querySelectorAll(".view-toggle button").forEach(control => control.classList.toggle("view-active", control === button));
   renderItems();
+});
+document.querySelector("#customFields").addEventListener("click", event => {
+  const button = event.target.closest(".scan-barcode");
+  if (button) startBarcodeScanner(button.dataset.fieldName);
 });
 document.querySelector("#groupTabs").addEventListener("click", event => {
   const tab = event.target.closest("[data-group]");
