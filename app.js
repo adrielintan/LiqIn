@@ -139,7 +139,7 @@ document.querySelector("#logoutButton").addEventListener("click", async () => {
 
 const starterItems = [];
 const starterGroups = {};
-const typeLabels = { text: "Text", barcode: "Barcode", year: "Year", date: "Date", integer: "Number (integer)", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
+const typeLabels = { text: "Text", barcode: "Barcode", year: "Year", date: "Date", integer: "Integer", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
 const currencyOptions = ["USD", "EUR", "GBP", "IDR", "JPY", "AUD", "CAD", "CHF", "CNY", "SGD"];
 const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480'%3E%3Crect width='480' height='480' fill='%23eef0ed'/%3E%3C/svg%3E";
 let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
