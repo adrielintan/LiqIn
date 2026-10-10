@@ -145,6 +145,7 @@ let selectedGroup = "All";
 let editingItemId = null;
 let editingGroupName = null;
 let pendingPhoto = null;
+let selectedPhotoFile = null;
 let photoSelectionToken = 0;
 let currentView = "grid";
 let draggedBuilderRow = null;
@@ -265,12 +266,15 @@ function closeModal(target) { target.hidden = true; if (modal.hidden && detailMo
 function resetPhotoPreview() {
   photoSelectionToken += 1;
   const photoInput = document.querySelector("#photoInput");
+  const cameraInput = document.querySelector("#cameraInput");
   const previewImage = document.querySelector("#photoPreview img");
   if (previewImage.src.startsWith("blob:")) URL.revokeObjectURL(previewImage.src);
   photoInput.value = "";
+  cameraInput.value = "";
   previewImage.removeAttribute("src");
   document.querySelector("#photoPreview").hidden = true;
   pendingPhoto = null;
+  selectedPhotoFile = null;
 }
 function openItemEditor(item = null) {
   editingItemId = item ? item.id : null;
@@ -614,9 +618,10 @@ document.querySelector("#groupTabs").addEventListener("click", event => {
   document.querySelectorAll(".tab").forEach(button => button.classList.toggle("active", button === tab));
   renderItems();
 });
-document.querySelector("#photoInput").addEventListener("change", async event => {
+async function handlePhotoSelection(event) {
   const file = event.target.files[0];
   if (!file) return;
+  selectedPhotoFile = file;
   const selectionToken = ++photoSelectionToken;
   const preview = document.querySelector("#photoPreview");
   const previewImage = preview.querySelector("img");
@@ -630,7 +635,9 @@ document.querySelector("#photoInput").addEventListener("change", async event => 
     resetPhotoPreview();
     window.alert(error.message);
   }
-});
+}
+document.querySelector("#photoInput").addEventListener("change", handlePhotoSelection);
+document.querySelector("#cameraInput").addEventListener("change", handlePhotoSelection);
 document.querySelector("#removePhoto").addEventListener("click", resetPhotoPreview);
 document.querySelector("#itemForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -645,7 +652,7 @@ document.querySelector("#itemForm").addEventListener("submit", async event => {
     const value = field.type === "multiple" ? data.getAll(field.name) : data.get(field.name);
     if (value && (Array.isArray(value) ? value.length : true)) values[field.name] = field.type === "multiple" ? value : value;
   });
-  const file = document.querySelector("#photoInput").files[0];
+  const file = selectedPhotoFile;
   let photo = pendingPhoto || {};
   if (file) {
     try {

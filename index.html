@@ -115,7 +115,7 @@
             <label class="field"><span>Quantity</span><input name="quantity" type="number" min="1" value="1" /></label>
           </div>
           <div class="custom-fields" id="customFields"></div>
-          <label class="upload-zone" for="photoInput"><span class="upload-icon">↥</span><strong>Drop a bottle photo here</strong><small>or click to browse · JPG, PNG up to 10MB</small><input id="photoInput" type="file" accept="image/*" /></label>
+          <div class="upload-zone"><span class="upload-icon">↥</span><strong>Attach a bottle photo</strong><small>JPG, PNG up to 10MB</small><div class="upload-actions"><label class="secondary-button file-button" for="photoInput">Choose file<input id="photoInput" type="file" accept="image/*" /></label><label class="secondary-button file-button" for="cameraInput">Take photo<input id="cameraInput" type="file" accept="image/*" capture="environment" /></label></div></div>
           <div class="photo-preview" id="photoPreview" hidden><img alt="Selected bottle preview" /><span>Thumbnail preview generated</span><button type="button" id="removePhoto">Remove</button></div>
           <div class="modal-actions"><button type="button" class="secondary-button" id="cancelModal">Cancel</button><button class="primary-button" id="itemSubmitButton" type="submit">Add to collection <span>→</span></button></div>
         </form>
