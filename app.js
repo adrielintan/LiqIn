@@ -292,6 +292,16 @@ function closeModal(target) {
   if (target === barcodeModal) stopBarcodeScanner();
   if (modal.hidden && detailModal.hidden && groupModal.hidden && createGroupModal.hidden && settingsModal.hidden && barcodeModal.hidden) document.body.style.overflow = "";
 }
+function hasValidBarcodeChecksum(value, format) {
+  if (!/^\d+$/.test(value)) return format === "qr_code" || format === "code_128";
+  if (format === "ean_13" && value.length === 13 || format === "ean_8" && value.length === 8 || format === "upc_a" && value.length === 12) {
+    const digits = [...value].map(Number);
+    const check = digits.pop();
+    const sum = digits.reduce((total, digit, index) => total + digit * ((digits.length - index) % 2 ? 3 : 1), 0);
+    return (10 - (sum % 10)) % 10 === check;
+  }
+  return format === "upc_e" ? value.length === 6 || value.length === 8 : format === "qr_code" || format === "code_128";
+}
 async function startBarcodeScanner(fieldName) {
   barcodeFieldName = fieldName;
   openModal(barcodeModal);
@@ -306,16 +316,35 @@ async function startBarcodeScanner(fieldName) {
     const video = document.querySelector("#barcodeVideo");
     video.srcObject = barcodeStream;
     await video.play();
+    const track = barcodeStream.getVideoTracks()[0];
+    const capabilities = track.getCapabilities?.();
+    if (capabilities?.zoom) {
+      await track.applyConstraints({ advanced: [{ zoom: Math.min(capabilities.zoom.max, Math.max(capabilities.zoom.min, 1.5)) }] }).catch(() => {});
+    }
+    let lastValue = "";
+    let consecutiveReads = 0;
     const scan = async () => {
       if (barcodeModal.hidden) return;
       try {
         const results = await detector.detect(video);
-        if (results[0]?.rawValue) {
+        const result = results.find(candidate => candidate.rawValue);
+        const value = result?.rawValue?.trim() || "";
+        const valid = value && hasValidBarcodeChecksum(value, result.format);
+        if (valid && value === lastValue) consecutiveReads += 1;
+        else if (valid) {
+          lastValue = value;
+          consecutiveReads = 1;
+        } else {
+          lastValue = "";
+          consecutiveReads = 0;
+        }
+        if (valid && consecutiveReads >= 3) {
           const input = customFields.querySelector(`[name="${CSS.escape(barcodeFieldName)}"]`);
-          if (input) input.value = results[0].rawValue;
+          if (input) input.value = value;
           closeModal(barcodeModal);
           return;
         }
+        message.textContent = valid ? "Barcode detected. Hold steady..." : "Point the camera at a barcode and hold it steady.";
       } catch {
         message.textContent = "Unable to read that barcode. Try moving closer or enter it manually.";
       }
