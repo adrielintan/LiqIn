@@ -641,47 +641,48 @@ document.querySelector("#cameraInput").addEventListener("change", handlePhotoSel
 document.querySelector("#removePhoto").addEventListener("click", resetPhotoPreview);
 document.querySelector("#itemForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const data = new FormData(event.target);
-  const values = {};
-  (fieldDefinitions[data.get("group")] || []).forEach(field => {
-    if (field.type === "currency") {
-      const amount = data.get(field.name);
-      if (amount !== "") values[field.name] = { amount, currency: data.get(`${field.name}__currency`) || "USD" };
-      return;
+  const submitButton = document.querySelector("#itemSubmitButton");
+  submitButton.disabled = true;
+  try {
+    const data = new FormData(event.target);
+    const values = {};
+    (fieldDefinitions[data.get("group")] || []).forEach(field => {
+      if (field.type === "currency") {
+        const amount = data.get(field.name);
+        if (amount !== "") values[field.name] = { amount, currency: data.get(`${field.name}__currency`) || "USD" };
+        return;
+      }
+      const value = field.type === "multiple" ? data.getAll(field.name) : data.get(field.name);
+      if (value && (Array.isArray(value) ? value.length : true)) values[field.name] = field.type === "multiple" ? value : value;
+    });
+    const file = selectedPhotoFile;
+    let photo = pendingPhoto || {};
+    if (file && !photo.thumbnail) photo = await createThumbnail(file);
+    const existing = editingItemId && items.find(item => item.id === editingItemId);
+    const updated = { ...(existing || {}), id: existing?.id || crypto.randomUUID(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, price: existing?.price || "—", image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
+    if (useApiAuth) {
+      const payload = JSON.stringify({ name: updated.name, group: updated.group, quantity: updated.quantity, values: updated.values });
+      const result = existing
+        ? await apiRequest(`/api/items/${encodeURIComponent(existing.id)}`, { method: "PUT", body: payload })
+        : await apiRequest("/api/items", { method: "POST", body: payload });
+      Object.assign(updated, result.item, { detail: `${result.item.quantity} in stock`, price: "—", thumbnail: fallbackImage, image: fallbackImage });
+      if (file) {
+        const uploadData = new FormData();
+        uploadData.append("image", file);
+        const imageResult = await fetch(`/api/items/${encodeURIComponent(result.item.id)}/image`, { method: "POST", credentials: "same-origin", body: uploadData });
+        if (!imageResult.ok) throw new Error((await imageResult.json()).error || "The image upload failed.");
+        const imageUrls = await imageResult.json();
+        Object.assign(updated, { thumbnail: imageUrls.thumbnailUrl, image: imageUrls.originalUrl, originalImage: imageUrls.originalUrl });
+      }
     }
-    const value = field.type === "multiple" ? data.getAll(field.name) : data.get(field.name);
-    if (value && (Array.isArray(value) ? value.length : true)) values[field.name] = field.type === "multiple" ? value : value;
-  });
-  const file = selectedPhotoFile;
-  let photo = pendingPhoto || {};
-  if (file) {
-    try {
-      if (!photo.thumbnail) photo = await createThumbnail(file);
-    } catch (error) {
-      window.alert(error.message);
-      return;
-    }
+    items = existing ? items.map(item => item.id === existing.id ? updated : item) : [updated, ...items];
+    persist(); closeModal(modal); event.target.reset(); resetPhotoPreview(); selectedGroup = "All"; renderGroupControls(); renderItems(); renderCustomFields();
+    editingItemId = null;
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to save the item.");
+  } finally {
+    submitButton.disabled = false;
   }
-  const existing = editingItemId && items.find(item => item.id === editingItemId);
-  const updated = { ...(existing || {}), id: existing?.id || crypto.randomUUID(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, price: existing?.price || "—", image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
-  if (useApiAuth) {
-    const payload = JSON.stringify({ name: updated.name, group: updated.group, quantity: updated.quantity, values: updated.values });
-    const result = existing
-      ? await apiRequest(`/api/items/${encodeURIComponent(existing.id)}`, { method: "PUT", body: payload })
-      : await apiRequest("/api/items", { method: "POST", body: payload });
-    Object.assign(updated, result.item, { detail: `${result.item.quantity} in stock`, price: "—", thumbnail: fallbackImage, image: fallbackImage });
-    if (file) {
-      const uploadData = new FormData();
-      uploadData.append("image", file);
-      const imageResult = await fetch(`/api/items/${encodeURIComponent(result.item.id)}/image`, { method: "POST", credentials: "same-origin", body: uploadData });
-      if (!imageResult.ok) throw new Error((await imageResult.json()).error || "The image upload failed.");
-      const imageUrls = await imageResult.json();
-      Object.assign(updated, { thumbnail: imageUrls.thumbnailUrl, image: imageUrls.originalUrl, originalImage: imageUrls.originalUrl });
-    }
-  }
-  items = existing ? items.map(item => item.id === existing.id ? updated : item) : [updated, ...items];
-  persist(); closeModal(modal); event.target.reset(); resetPhotoPreview(); selectedGroup = "All"; renderGroupControls(); renderItems(); renderCustomFields();
-  editingItemId = null;
 });
 document.querySelector("#groupForm").addEventListener("submit", async event => {
   event.preventDefault();
