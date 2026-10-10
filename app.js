@@ -407,6 +407,8 @@ function openGroupManager() {
 function openCreateGroup() {
   editingGroupName = null;
   document.querySelector("#groupForm").reset();
+  document.querySelector("#createGroupTitle").innerHTML = 'Create a group<span class="accent-dot">.</span>';
+  document.querySelector("#groupSubmitButton").innerHTML = 'Create group <span>→</span>';
   document.querySelector("#fieldBuilderTitle").textContent = "Custom fields";
   document.querySelector("#fieldBuilder").replaceChildren();
   addBuilderRow();
@@ -448,6 +450,13 @@ document.querySelector("#groupList").addEventListener("click", async event => {
     renderCustomFields();
     renderGroupList();
   }
+});
+document.querySelector(".mobile-menu").addEventListener("click", () => {
+  document.querySelector(".app-shell").classList.toggle("sidebar-open");
+});
+document.querySelector(".main-content").addEventListener("click", event => {
+  if (event.target.closest(".mobile-menu")) return;
+  document.querySelector(".app-shell").classList.remove("sidebar-open");
 });
 [modal, detailModal, groupModal, createGroupModal, settingsModal].forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) closeModal(dialog); }));
 document.querySelector("#closeDetailModal").addEventListener("click", () => closeModal(detailModal));
@@ -663,28 +672,32 @@ document.querySelector("#itemForm").addEventListener("submit", async event => {
 });
 document.querySelector("#groupForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const data = new FormData(event.target);
-  const name = data.get("groupName").trim();
-  if (!name) return;
-  if (name !== editingGroupName && fieldDefinitions[name]) { window.alert("A group with that name already exists."); return; }
-  const rows = [...document.querySelectorAll(".builder-row")];
-  const updatedFields = rows.map(row => {
-    const label = row.querySelector('[name="fieldLabel"]').value.trim();
-    const type = row.querySelector('[name="fieldType"]').value;
-    const options = [...row.querySelectorAll('[name="optionValue"]')].map(option => option.value);
-    const precision = type === "decimal" ? Math.min(8, Math.max(0, Number(row.querySelector('[name="precision"]').value) || 0)) : type === "currency" ? 2 : undefined;
-    return { label, name: label.toLowerCase().replace(/[^a-z0-9]+/g, "-"), type, options, showInDashboard: row.querySelector('[name="showInDashboard"]').checked, ...(precision === undefined ? {} : { precision }), placeholder: `Enter ${label.toLowerCase()}` };
-  });
-  if (useApiAuth) {
-    const payload = JSON.stringify(groupPayload(name, updatedFields));
-    if (editingGroupName) await apiRequest(`/api/groups/${encodeURIComponent(editingGroupName)}`, { method: "PUT", body: payload });
-    else await apiRequest("/api/groups", { method: "POST", body: payload });
+  try {
+    const data = new FormData(event.target);
+    const name = String(data.get("groupName") || "").trim();
+    if (!name) return;
+    if (name !== editingGroupName && fieldDefinitions[name]) { window.alert("A group with that name already exists."); return; }
+    const rows = [...document.querySelectorAll(".builder-row")];
+    const updatedFields = rows.map(row => {
+      const label = row.querySelector('[name="fieldLabel"]').value.trim();
+      const type = row.querySelector('[name="fieldType"]').value;
+      const options = [...row.querySelectorAll('[name="optionValue"]')].map(option => option.value);
+      const precision = type === "decimal" ? Math.min(8, Math.max(0, Number(row.querySelector('[name="precision"]').value) || 0)) : type === "currency" ? 2 : undefined;
+      return { label, name: label.toLowerCase().replace(/[^a-z0-9]+/g, "-"), type, options, showInDashboard: row.querySelector('[name="showInDashboard"]').checked, ...(precision === undefined ? {} : { precision }), placeholder: `Enter ${label.toLowerCase()}` };
+    });
+    if (useApiAuth) {
+      const payload = JSON.stringify(groupPayload(name, updatedFields));
+      if (editingGroupName) await apiRequest(`/api/groups/${encodeURIComponent(editingGroupName)}`, { method: "PUT", body: payload });
+      else await apiRequest("/api/groups", { method: "POST", body: payload });
+    }
+    if (editingGroupName && editingGroupName !== name) items = items.map(item => item.group === editingGroupName ? { ...item, group: name } : item);
+    if (editingGroupName && editingGroupName !== name) delete fieldDefinitions[editingGroupName];
+    fieldDefinitions[name] = updatedFields;
+    persist(); closeModal(createGroupModal); event.target.reset(); renderGroupControls(); renderCustomFields(); renderGroupList();
+    editingGroupName = null;
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to save the group.");
   }
-  if (editingGroupName && editingGroupName !== name) items = items.map(item => item.group === editingGroupName ? { ...item, group: name } : item);
-  if (editingGroupName && editingGroupName !== name) delete fieldDefinitions[editingGroupName];
-  fieldDefinitions[name] = updatedFields;
-  persist(); closeModal(createGroupModal); event.target.reset(); renderGroupControls(); renderCustomFields(); renderGroupList();
-  editingGroupName = null;
 });
 renderGroupControls();
 renderItems();
