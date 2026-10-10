@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f6f4" />
+    <title>LiqIn — Liquor inventory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="auth-screen" id="authScreen">
+      <div class="auth-panel">
+        <div class="brand auth-brand"><span class="brand-mark">L</span><span>LiqIn</span></div>
+        <div class="auth-header">
+          <p class="eyebrow">Private collection</p>
+          <h1 id="authTitle">Welcome back<span class="accent-dot">.</span></h1>
+          <p id="authSubtitle">Sign in to manage your liquor inventory.</p>
+        </div>
+        <form id="authForm">
+          <label class="field" id="authUsernameField" hidden><span>Username</span><input name="username" autocomplete="username" placeholder="e.g. alexsmith" /></label>
+          <label class="field" id="authEmailField" hidden><span>Email address</span><input name="email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+          <label class="field" id="authIdentifierField"><span>Username / email address</span><input name="identifier" type="text" autocomplete="username" required placeholder="Username or email address" /></label>
+          <label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="At least 8 characters" /></label>
+          <p class="auth-error" id="authError" role="alert" hidden></p>
+          <button class="primary-button auth-submit" type="submit" id="authSubmit">Sign in <span>→</span></button>
+        </form>
+        <p class="auth-switch"><span id="authSwitchPrompt">Don't have an account?</span> <button type="button" id="authSwitch">Create one</button></p>
+        <p class="auth-note">Local prototype authentication. OIDC can be connected later through the same authentication boundary.</p>
+      </div>
+    </section>
+
+    <div class="app-shell" id="appShell" hidden>
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">L</span><span>LiqIn</span></div>
+        <nav class="main-nav" aria-label="Main navigation">
+          <a class="nav-item active" href="#"><span class="nav-icon">⌂</span>Overview</a>
+          <a class="nav-item" href="#groups" id="manageGroupsLink"><span class="nav-icon">◈</span>Groups <span class="nav-count" id="groupCount">6</span></a>
+          <a class="nav-item" href="#activity"><span class="nav-icon">↗</span>Activity</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="storage-label"><span>Storage</span><span>68%</span></div>
+          <div class="storage-track"><span></span></div>
+          <p>136 of 200 bottle capacity used</p>
+          <a class="nav-item settings" href="#settings" id="settingsLink"><span class="nav-icon">⚙</span>Settings</a>
+          <div class="profile"><div class="avatar" id="profileAvatar">AS</div><div><strong id="profileName">Alex Smith</strong><small>Admin</small></div><button type="button" class="logout-button" id="logoutButton">Log out</button></div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <button class="mobile-menu" aria-label="Open menu">☰</button>
+          <div class="breadcrumbs"><span>Inventory</span><span>/</span><strong>All items</strong></div>
+          <div class="topbar-actions">
+            <button class="icon-button" aria-label="Notifications">♧<span class="notification-dot"></span></button>
+            <div class="top-avatar" id="topAvatar">AS</div>
+          </div>
+        </header>
+
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow">Saturday, October 12, 2024</p>
+            <h1>Your collection<span class="accent-dot">.</span></h1>
+            <p class="subtitle">A clear view of everything in your cellar.</p>
+          </div>
+          <button class="primary-button" id="addItemButton"><span>＋</span> Add item</button>
+        </section>
+
+        <section class="stats-row" aria-label="Inventory summary">
+          <div class="stat-card"><div class="stat-icon amber">◒</div><div><span>Total items</span><strong id="totalItems">24</strong></div><small class="positive">↑ 3 this month</small></div>
+          <div class="stat-card"><div class="stat-icon green">▣</div><div><span>Groups</span><strong id="groupsTotal">6</strong></div><small>Organized your way</small></div>
+          <div class="stat-card"><div class="stat-icon purple">⌁</div><div><span>Est. collection value</span><strong>$4,280</strong></div><small class="positive">↑ 8.2% value</small></div>
+        </section>
+
+        <section class="inventory-section">
+          <div class="section-toolbar">
+            <div><h2>All items <span class="item-total" id="itemTotalLabel">24</span></h2><p>Browse and manage your collection</p></div>
+            <div class="toolbar-controls">
+              <label class="search"><span>⌕</span><input id="searchInput" type="search" placeholder="Search your collection..." /></label>
+              <button class="filter-button" id="filterButton">Filter <span>⌄</span></button>
+              <div class="view-toggle"><button class="view-active" data-view="grid" aria-label="Grid view">▦</button><button data-view="list" aria-label="List view">☷</button></div>
+            </div>
+          </div>
+          <div class="filter-panel" id="filterPanel" hidden>
+            <label class="filter-field"><span>Group</span><select id="filterGroup"><option value="All">All groups</option></select></label>
+            <label class="filter-field"><span>Stock</span><select id="filterStock"><option value="all">Any stock</option><option value="in">In stock</option><option value="low">Low stock (1–2)</option></select></label>
+            <label class="filter-field"><span>Photo</span><select id="filterPhoto"><option value="all">Any photo status</option><option value="with">With photo</option><option value="without">Without photo</option></select></label>
+            <label class="filter-field"><span>Sort by</span><select id="sortItems"><option value="recent">Recently added</option><option value="name">Name</option><option value="group">Group</option><option value="quantity">Quantity</option></select></label>
+            <button type="button" class="clear-filter-button" id="clearFilters">Clear filters</button>
+          </div>
+          <div class="group-tabs" id="groupTabs">
+            <button class="tab active" data-group="All">All <span>24</span></button>
+            <button class="tab" data-group="Whiskey">Whiskey <span>8</span></button>
+            <button class="tab" data-group="Wine">Wine <span>6</span></button>
+            <button class="tab" data-group="Gin">Gin <span>4</span></button>
+            <button class="tab" data-group="Rum">Rum <span>3</span></button>
+            <button class="tab" data-group="Tequila">Tequila <span>3</span></button>
+          </div>
+          <div class="inventory-grid" id="inventoryGrid"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="itemModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button class="close-button" id="closeModal" aria-label="Close">×</button>
+        <div class="modal-header"><p class="eyebrow" id="itemModalEyebrow">New addition</p><h2 id="modalTitle">Add an item<span class="accent-dot">.</span></h2><p>Choose a group to load its custom fields.</p></div>
+        <form id="itemForm">
+          <div class="form-grid">
+            <label class="field full"><span>Item name</span><input name="name" required placeholder="e.g. Glenfiddich 18 Year" /></label>
+            <label class="field"><span>Group</span><select name="group" id="groupSelect"><option>Whiskey</option><option>Wine</option><option>Gin</option><option>Rum</option><option>Tequila</option></select></label>
+            <label class="field"><span>Quantity</span><input name="quantity" type="number" min="1" value="1" /></label>
+          </div>
+          <div class="custom-fields" id="customFields"></div>
+          <label class="upload-zone" for="photoInput"><span class="upload-icon">↥</span><strong>Drop a bottle photo here</strong><small>or click to browse · JPG, PNG up to 10MB</small><input id="photoInput" type="file" accept="image/*" /></label>
+          <div class="photo-preview" id="photoPreview" hidden><img alt="Selected bottle preview" /><span>Thumbnail preview generated</span><button type="button" id="removePhoto">Remove</button></div>
+          <div class="modal-actions"><button type="button" class="secondary-button" id="cancelModal">Cancel</button><button class="primary-button" id="itemSubmitButton" type="submit">Add to collection <span>→</span></button></div>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="detailModal" hidden>
+      <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+        <button class="close-button" id="closeDetailModal" aria-label="Close">×</button>
+        <div id="detailContent"></div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="groupModal" hidden>
+      <section class="modal group-modal" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+        <button class="close-button" id="closeGroupModal" aria-label="Close">×</button>
+        <div class="modal-header"><p class="eyebrow">Collection structure</p><h2 id="groupModalTitle">Manage groups<span class="accent-dot">.</span></h2><p>Define the fields you want to track for each type of liquor.</p></div>
+        <div class="group-list" id="groupList"></div>
+        <button type="button" class="add-group-button" id="addGroupButton">＋ Add Group</button>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="createGroupModal" hidden>
+      <section class="modal group-modal" role="dialog" aria-modal="true" aria-labelledby="createGroupTitle">
+        <button class="close-button" id="closeCreateGroupModal" aria-label="Close">×</button>
+        <div class="modal-header"><p class="eyebrow">Collection structure</p><h2 id="createGroupTitle">Create a group<span class="accent-dot">.</span></h2><p>Define the fields you want to track for this type of liquor.</p></div>
+        <form id="groupForm">
+          <label class="field full"><span>Group name</span><input name="groupName" required placeholder="e.g. Brandy" /></label>
+          <div class="field-list-heading"><strong id="fieldBuilderTitle">Custom fields</strong></div>
+          <div id="fieldBuilder"></div>
+          <button type="button" class="add-field-button add-field-bottom" id="addFieldButton">＋ Add field</button>
+          <div class="modal-actions"><button type="button" class="secondary-button" id="cancelCreateGroupModal">Cancel</button><button class="primary-button" id="groupSubmitButton" type="submit">Create group <span>→</span></button></div>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="settingsModal" hidden>
+      <section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <button class="close-button" id="closeSettingsModal" aria-label="Close">×</button>
+        <div class="modal-header"><p class="eyebrow">Workspace tools</p><h2 id="settingsTitle">Settings<span class="accent-dot">.</span></h2><p>Back up your collection or restore it on another browser.</p></div>
+        <div class="settings-section"><strong>Change password</strong><p>Use your current password to set a new one for this local account.</p><form id="passwordForm" class="password-form"><label class="field"><span>Current password</span><input name="currentPassword" type="password" autocomplete="current-password" minlength="8" required></label><label class="field"><span>New password</span><input name="newPassword" type="password" autocomplete="new-password" minlength="8" required></label><label class="field"><span>Confirm new password</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><p class="password-message" id="passwordMessage" role="status" hidden></p><button class="secondary-button" type="submit">Update password</button></form></div>
+        <div class="settings-section"><strong>Collection backup</strong><p>Export items, groups, and custom field values as one JSON file.</p><div class="settings-actions"><button class="secondary-button" id="exportDataButton">↓ Export backup</button><label class="secondary-button file-button" for="importDataInput">↑ Import backup<input id="importDataInput" type="file" accept="application/json,.json"></label></div></div>
+        <div class="settings-section danger-section"><strong>Reset prototype data</strong><p>Remove local changes and restore the original sample collection.</p><button class="danger-button" id="resetDataButton">Reset local data</button></div>
+      </section>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
