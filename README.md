@@ -233,7 +233,9 @@ For an internet-facing deployment:
 
 When accessing the container directly over HTTP, such as
 `http://server-address:9345`, keep `HTTPS_ENABLED=false`. This prevents the
-browser from upgrading asset requests to HTTPS before a TLS endpoint exists.
+browser from upgrading asset requests to HTTPS before a TLS endpoint exists and
+allows the HTTP session cookie to be stored. When HTTPS is enabled, the session
+cookie is marked `Secure`.
 
 Production OIDC is intentionally deferred. The authentication boundary is
 isolated so an OIDC provider can be added later without changing inventory

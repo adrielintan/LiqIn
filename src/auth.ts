@@ -35,7 +35,7 @@ function tokenHash(token: string): string {
 
 function setSessionCookie(response: Response, token: string): void {
   const maxAge = config.sessionTtlDays * 24 * 60 * 60;
-  response.setHeader("Set-Cookie", `${config.sessionCookieName}=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax${config.nodeEnv === "production" ? "; Secure" : ""}`);
+  response.setHeader("Set-Cookie", `${config.sessionCookieName}=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax${config.httpsEnabled ? "; Secure" : ""}`);
 }
 
 function readCookie(request: Request): string | undefined {
@@ -113,7 +113,7 @@ export async function currentUser(request: AuthenticatedRequest, response: Respo
 export async function logout(request: Request, response: Response): Promise<void> {
   const token = readCookie(request);
   if (token) await pool.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash(token)]);
-  response.setHeader("Set-Cookie", `${config.sessionCookieName}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`);
+  response.setHeader("Set-Cookie", `${config.sessionCookieName}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${config.httpsEnabled ? "; Secure" : ""}`);
   response.status(204).end();
 }
 
