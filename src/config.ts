@@ -10,6 +10,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT m
 
 export const config = {
   nodeEnv: process.env.NODE_ENV || "development",
+  httpsEnabled: booleanFromEnv(process.env.HTTPS_ENABLED, false),
   port,
   databaseUrl: process.env.DATABASE_URL || "postgresql://liqin:liqin_dev_password@localhost:5432/liqin",
   databaseSsl: booleanFromEnv(process.env.DATABASE_SSL, false),

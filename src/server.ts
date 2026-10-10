@@ -10,7 +10,14 @@ import { downloadImage, uploadImage } from "./images.js";
 const app = express();
 
 app.disable("x-powered-by");
-app.use(helmet());
+app.use(helmet(config.httpsEnabled ? undefined : {
+  contentSecurityPolicy: {
+    directives: {
+      upgradeInsecureRequests: null
+    }
+  },
+  strictTransportSecurity: false
+}));
 app.use(express.json({ limit: "25mb" }));
 
 app.post("/api/auth/register", register);

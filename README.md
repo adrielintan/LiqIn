@@ -90,6 +90,7 @@ At minimum, review these settings:
 |---|---|---|
 | `APP_PORT` | Host port exposed for the web application | `3000` |
 | `PORT` | Port used inside the app container | `3000` |
+| `HTTPS_ENABLED` | Enables HTTPS-only browser security headers | `false` |
 | `DB_PORT` | Host port exposed for PostgreSQL | `5432` |
 | `POSTGRES_DB` | PostgreSQL database name | `liqin` |
 | `POSTGRES_USER` | PostgreSQL username | `liqin` |
@@ -223,12 +224,16 @@ account or other users' data.
 For an internet-facing deployment:
 
 1. Put the app behind an HTTPS reverse proxy such as Caddy, Nginx, or Traefik.
-2. Set `NODE_ENV=production`.
+2. Set `NODE_ENV=production` and `HTTPS_ENABLED=true` when HTTPS is terminated before the app.
 3. Use a long random database password.
 4. Restrict PostgreSQL access to the internal Docker network when possible.
 5. Do not expose port `5432` publicly unless it is explicitly required.
 6. Back up the database and upload volume regularly.
 7. Store `.env` securely and restrict its filesystem permissions.
+
+When accessing the container directly over HTTP, such as
+`http://server-address:9345`, keep `HTTPS_ENABLED=false`. This prevents the
+browser from upgrading asset requests to HTTPS before a TLS endpoint exists.
 
 Production OIDC is intentionally deferred. The authentication boundary is
 isolated so an OIDC provider can be added later without changing inventory
