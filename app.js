@@ -139,7 +139,7 @@ document.querySelector("#logoutButton").addEventListener("click", async () => {
 
 const starterItems = [];
 const starterGroups = {};
-const typeLabels = { text: "Text", barcode: "Barcode", year: "Year", date: "Date", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
+const typeLabels = { text: "Text", barcode: "Barcode", year: "Year", date: "Date", integer: "Number (integer)", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
 const currencyOptions = ["USD", "EUR", "GBP", "IDR", "JPY", "AUD", "CAD", "CHF", "CNY", "SGD"];
 const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480'%3E%3Crect width='480' height='480' fill='%23eef0ed'/%3E%3C/svg%3E";
 let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
@@ -148,10 +148,6 @@ Object.keys(fieldDefinitions).forEach(group => {
   fieldDefinitions[group] = (fieldDefinitions[group] || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }));
 });
 Object.values(fieldDefinitions).forEach(fields => fields.forEach(field => {
-  if (field.type === "integer") {
-    field.type = "decimal";
-    field.precision = 0;
-  }
   if (field.type === "currency") field.precision = 2;
 }));
 let selectedGroup = "All";
@@ -249,15 +245,15 @@ function renderGroupControls() {
 function renderCustomFields() {
   const fields = fieldDefinitions[groupSelect.value] || [];
   customFields.innerHTML = fields.map(field => {
-    const inputType = field.type === "year" || field.type === "decimal" || field.type === "currency" ? "number" : field.type === "date" ? "date" : "text";
+    const inputType = field.type === "year" || field.type === "integer" || field.type === "decimal" || field.type === "currency" ? "number" : field.type === "date" ? "date" : "text";
     const precision = field.type === "currency" ? 2 : Number.isInteger(field.precision) ? field.precision : 2;
     const step = precision === 0 ? "1" : `0.${"0".repeat(Math.max(0, precision - 1))}1`;
-    const numericAttributes = field.type === "decimal" || field.type === "currency" ? `step="${step}" min="0"` : field.type === "year" ? 'min="1000" max="9999"' : "";
+    const numericAttributes = field.type === "integer" ? 'step="1"' : field.type === "decimal" || field.type === "currency" ? `step="${step}" min="0"` : field.type === "year" ? 'min="1000" max="9999"' : "";
     if (field.type === "single") return `<label class="field"><span>${escapeHtml(field.label)}</span><select name="${escapeHtml(field.name)}">${(field.options || []).map(option => `<option>${escapeHtml(option)}</option>`).join("")}</select></label>`;
     if (field.type === "multiple") return `<fieldset class="field option-field"><legend>${escapeHtml(field.label)}</legend><div class="multi-options">${(field.options || []).map(option => `<label><input type="checkbox" name="${escapeHtml(field.name)}" value="${escapeHtml(option)}"><span>${escapeHtml(option)}</span></label>`).join("")}</div></fieldset>`;
     if (field.type === "currency") return `<div class="field"><span>${escapeHtml(field.label)}</span><div class="currency-input"><select name="${escapeHtml(field.name)}__currency" aria-label="${escapeHtml(field.label)} currency">${currencyOptions.map(currency => `<option>${currency}</option>`).join("")}</select><input name="${escapeHtml(field.name)}" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></div></div>`;
     if (field.type === "barcode") return `<div class="field"><span>${escapeHtml(field.label)}</span><div class="barcode-input"><input name="${escapeHtml(field.name)}" type="text" inputmode="numeric" autocomplete="off" placeholder="${escapeHtml(field.placeholder || "Scan or enter barcode")}"><button type="button" class="secondary-button scan-barcode" data-field-name="${escapeHtml(field.name)}">Scan</button></div></div>`;
-    return `<label class="field"><span>${escapeHtml(field.label)}</span><input name="${escapeHtml(field.name)}" type="${inputType}" inputmode="${inputType === "number" ? "decimal" : ""}" placeholder="${escapeHtml(field.placeholder || "")}" ${numericAttributes}></label>`;
+    return `<label class="field"><span>${escapeHtml(field.label)}</span><input name="${escapeHtml(field.name)}" type="${inputType}" inputmode="${field.type === "integer" ? "numeric" : inputType === "number" ? "decimal" : ""}" placeholder="${escapeHtml(field.placeholder || "")}" ${numericAttributes}></label>`;
   }).join("");
 }
 function fillCustomFields(values = {}) {
