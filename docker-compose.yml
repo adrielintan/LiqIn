@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - liqin_uploads:${UPLOADS_CONTAINER_PATH:-/var/lib/liqin/uploads}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-liqin}
+      POSTGRES_USER: ${POSTGRES_USER:-liqin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - liqin_db:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liqin} -d ${POSTGRES_DB:-liqin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  liqin_db:
+  liqin_uploads:

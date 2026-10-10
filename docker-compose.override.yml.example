@@ -1,0 +1,7 @@
+services:
+  app:
+    volumes:
+      - ./uploads:${UPLOADS_CONTAINER_PATH:-/var/lib/liqin/uploads}
+    command: npm run dev
+    environment:
+      NODE_ENV: development

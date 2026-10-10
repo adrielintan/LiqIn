@@ -11,6 +11,7 @@ const authSwitch = document.querySelector("#authSwitch");
 const authSwitchPrompt = document.querySelector("#authSwitchPrompt");
 const authError = document.querySelector("#authError");
 let authMode = "login";
+const useApiAuth = window.location.protocol !== "file:";
 const AUTH_USERS_KEY = "liqin-users";
 const AUTH_SESSION_KEY = "liqin-session";
 
@@ -20,6 +21,14 @@ function getAuthUsers() {
 function getSignedInUser() {
   const session = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || "null");
   return session && getAuthUsers().find(user => user.id === session.userId);
+}
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, { credentials: "same-origin", headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...options });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || "The request could not be completed.");
+  }
+  return response.status === 204 ? null : response.json();
 }
 function setAuthError(message) {
   authError.textContent = message;
@@ -81,6 +90,15 @@ authForm.addEventListener("submit", async event => {
   const password = data.get("password");
   try {
     let user;
+    if (useApiAuth) {
+      const result = authMode === "register"
+        ? await apiRequest("/api/auth/register", { method: "POST", body: JSON.stringify({ username, email, password }) })
+        : await apiRequest("/api/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) });
+      showAuthenticatedApp(result.user);
+      await loadApiInventory();
+      authForm.reset();
+      return;
+    }
     if (authMode === "register") {
       const users = getAuthUsers();
       const normalizedUsername = username.toLowerCase();
@@ -99,34 +117,20 @@ authForm.addEventListener("submit", async event => {
     setAuthError(error.message);
   }
 });
-document.querySelector("#logoutButton").addEventListener("click", () => {
+document.querySelector("#logoutButton").addEventListener("click", async () => {
+  if (useApiAuth) await apiRequest("/api/auth/logout", { method: "POST" });
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   showAuthScreen();
   authForm.elements.identifier.focus();
 });
 
-const starterItems = [
-  { name: "Macallan 12 Double Cask", group: "Whiskey", detail: "12 year · 700ml", price: "$86", image: "https://images.unsplash.com/photo-1527281400683-1aae777175f8?auto=format&fit=crop&w=700&q=80" },
-  { name: "Château Margaux 2015", group: "Wine", detail: "2015 · 750ml", price: "$320", image: "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=700&q=80" },
-  { name: "Monkey 47 Dry Gin", group: "Gin", detail: "500ml", price: "$48", image: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=700&q=80" },
-  { name: "Don Julio 1942", group: "Tequila", detail: "750ml", price: "$164", image: "https://images.unsplash.com/photo-1569529465841-dfecdab7503b?auto=format&fit=crop&w=700&q=80" },
-  { name: "Havana Club 7 Años", group: "Rum", detail: "7 year · 700ml", price: "$39", image: "https://images.unsplash.com/photo-1608885898957-a5590d8a7c7b?auto=format&fit=crop&w=700&q=80" },
-  { name: "Glenfiddich 18 Year", group: "Whiskey", detail: "18 year · 700ml", price: "$142", image: "https://images.unsplash.com/photo-1569529465841-dfecdab7503b?auto=format&fit=crop&w=700&q=80" },
-  { name: "Cloudy Bay Sauvignon", group: "Wine", detail: "2022 · 750ml", price: "$29", image: "https://images.unsplash.com/photo-1473973266408-ed4e27abdd47?auto=format&fit=crop&w=700&q=80" },
-  { name: "Hendrick's Gin", group: "Gin", detail: "700ml", price: "$43", image: "https://images.unsplash.com/photo-1584225064785-c62a8b43d148?auto=format&fit=crop&w=700&q=80" }
-];
-const starterGroups = {
-  Whiskey: [{ label: "Age statement", name: "age", type: "text", placeholder: "e.g. 12 year" }, { label: "Distillery", name: "distillery", type: "text", placeholder: "e.g. The Macallan" }],
-  Wine: [{ label: "Vintage year", name: "year", type: "year", placeholder: "e.g. 2015" }, { label: "Wine style", name: "style", type: "single", options: ["Red", "White", "Rosé", "Sparkling"] }],
-  Gin: [{ label: "Botanical profile", name: "botanicals", type: "text", placeholder: "e.g. Juniper, citrus" }, { label: "ABV (%)", name: "abv", type: "decimal", placeholder: "e.g. 41.4" }],
-  Rum: [{ label: "Age statement", name: "age", type: "text", placeholder: "e.g. 7 year" }, { label: "Rum style", name: "style", type: "single", options: ["Dark", "White", "Spiced", "Aged"] }],
-  Tequila: [{ label: "Tequila type", name: "type", type: "single", options: ["Blanco", "Reposado", "Añejo", "Extra Añejo"] }, { label: "Agave source", name: "agave", type: "text", placeholder: "e.g. Jalisco" }]
-};
+const starterItems = [];
+const starterGroups = {};
 const typeLabels = { text: "Text", year: "Year", date: "Date", currency: "Currency", decimal: "Decimal", single: "Single option", multiple: "Multiple options" };
 const currencyOptions = ["USD", "EUR", "GBP", "IDR", "JPY", "AUD", "CAD", "CHF", "CNY", "SGD"];
-const fallbackImage = starterItems[0].image;
-let items = (JSON.parse(localStorage.getItem("liqin-items") || "null") || starterItems).map(item => ({ ...item, id: item.id || crypto.randomUUID(), thumbnail: item.thumbnail || item.image }));
-let fieldDefinitions = JSON.parse(localStorage.getItem("liqin-groups") || "null") || starterGroups;
+const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480'%3E%3Crect width='480' height='480' fill='%23eef0ed'/%3E%3C/svg%3E";
+let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || crypto.randomUUID(), thumbnail: item.thumbnail || item.image || fallbackImage }));
+let fieldDefinitions = JSON.parse(localStorage.getItem("liqin-groups") || "{}");
 Object.keys(fieldDefinitions).forEach(group => {
   fieldDefinitions[group] = (fieldDefinitions[group] || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }));
 });
@@ -173,6 +177,18 @@ document.addEventListener("pointerup", () => {
 function persist() {
   localStorage.setItem("liqin-items", JSON.stringify(items));
   localStorage.setItem("liqin-groups", JSON.stringify(fieldDefinitions));
+}
+async function loadApiInventory() {
+  const data = await apiRequest("/api/inventory");
+  fieldDefinitions = Object.fromEntries(data.groups.map(group => [group.name, (group.fields || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }))]));
+  items = (data.items || []).map(item => ({ ...item, detail: `${item.quantity} in stock`, price: "—", thumbnail: item.thumbnailUrl || fallbackImage, image: item.imageUrl || fallbackImage, originalImage: item.imageUrl || undefined }));
+  selectedGroup = "All";
+  renderGroupControls();
+  renderItems();
+  renderCustomFields();
+}
+function groupPayload(name, fields) {
+  return { name, fields: fields.map(field => ({ label: field.label, name: field.name, type: field.type, options: field.options || [], precision: field.precision, showInDashboard: field.showInDashboard === true, placeholder: field.placeholder })) };
 }
 function groupNames() { return Object.keys(fieldDefinitions); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character])); }
@@ -287,8 +303,9 @@ function renderDetail(item) {
   }).join("");
   document.querySelector("#detailContent").innerHTML = `<p class="eyebrow">${escapeHtml(item.group)}</p><h2 id="detailTitle">${escapeHtml(item.name)}<span class="accent-dot">.</span></h2><p class="detail-subtitle">${escapeHtml(item.detail)} · ${escapeHtml(item.price)}</p><img class="detail-image" src="${escapeHtml(item.originalImage || item.image)}" alt="${escapeHtml(item.name)}"><div class="detail-fields">${details || '<p class="detail-empty">No custom values recorded for this item.</p>'}</div><div class="modal-actions"><button type="button" class="secondary-button" id="deleteItemButton">Delete item</button><button type="button" class="primary-button" id="editItemButton">Edit item <span>→</span></button></div>`;
   document.querySelector("#editItemButton").addEventListener("click", () => { closeModal(detailModal); openItemEditor(item); });
-  document.querySelector("#deleteItemButton").addEventListener("click", () => {
+  document.querySelector("#deleteItemButton").addEventListener("click", async () => {
     if (!window.confirm(`Delete ${item.name}?`)) return;
+    if (useApiAuth) await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: "DELETE" });
     items = items.filter(candidate => candidate.id !== item.id);
     persist(); closeModal(detailModal); renderGroupControls(); renderItems();
   });
@@ -406,7 +423,7 @@ document.querySelector("#addGroupButton").addEventListener("click", openCreateGr
 document.querySelector("#closeCreateGroupModal").addEventListener("click", () => closeModal(createGroupModal));
 document.querySelector("#cancelCreateGroupModal").addEventListener("click", () => closeModal(createGroupModal));
 document.querySelector("#addFieldButton").addEventListener("click", addBuilderRow);
-document.querySelector("#groupList").addEventListener("click", event => {
+document.querySelector("#groupList").addEventListener("click", async event => {
   const name = event.target.dataset.group;
   if (!name) return;
   if (event.target.classList.contains("edit-group")) {
@@ -424,6 +441,7 @@ document.querySelector("#groupList").addEventListener("click", event => {
   } else if (event.target.classList.contains("delete-group")) {
     if (items.some(item => item.group === name)) return;
     if (!window.confirm(`Delete the ${name} group?`)) return;
+    if (useApiAuth) await apiRequest(`/api/groups/${encodeURIComponent(name)}`, { method: "DELETE" });
     delete fieldDefinitions[name];
     persist();
     renderGroupControls();
@@ -444,6 +462,14 @@ document.querySelector("#passwordForm").addEventListener("submit", async event =
   const currentPassword = data.get("currentPassword");
   const newPassword = data.get("newPassword");
   try {
+    if (useApiAuth) {
+      await apiRequest("/api/auth/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword, confirmPassword: data.get("confirmPassword") }) });
+      event.target.reset();
+      message.textContent = "Password updated successfully.";
+      message.classList.add("success");
+      message.hidden = false;
+      return;
+    }
     const user = getSignedInUser();
     if (!user || user.passwordHash !== await hashPassword(currentPassword)) throw new Error("The current password is incorrect.");
     if (newPassword !== data.get("confirmPassword")) throw new Error("The new passwords do not match.");
@@ -476,6 +502,23 @@ document.querySelector("#importDataInput").addEventListener("change", async even
     const backup = JSON.parse(await file.text());
     if (backup.version !== 1 || !Array.isArray(backup.items) || !backup.groups || typeof backup.groups !== "object") throw new Error("This file is not a valid LiqIn backup.");
     if (!backup.items.every(item => item && typeof item.name === "string" && typeof item.group === "string")) throw new Error("The backup contains an invalid item.");
+    if (useApiAuth) {
+      const imported = await apiRequest("/api/inventory/import", { method: "POST", body: JSON.stringify(backup) });
+      for (const importedItem of imported.items) {
+        const source = backup.items[importedItem.sourceIndex];
+        const imageData = source?.originalImage || source?.image;
+        if (!imageData || !imageData.startsWith("data:image/")) continue;
+        const imageResponse = await fetch(imageData);
+        const imageBlob = await imageResponse.blob();
+        const uploadData = new FormData();
+        uploadData.append("image", imageBlob, "imported-image");
+        const uploadResponse = await fetch(`/api/items/${encodeURIComponent(importedItem.id)}/image`, { method: "POST", credentials: "same-origin", body: uploadData });
+        if (!uploadResponse.ok) throw new Error((await uploadResponse.json()).error || `Unable to import the image for ${source.name}.`);
+      }
+      await loadApiInventory();
+      closeModal(settingsModal);
+      return;
+    }
     items = backup.items.map(item => ({ ...item, id: item.id || crypto.randomUUID(), thumbnail: item.thumbnail || item.image || fallbackImage }));
     fieldDefinitions = backup.groups;
     Object.keys(fieldDefinitions).forEach(group => {
@@ -484,7 +527,9 @@ document.querySelector("#importDataInput").addEventListener("change", async even
     persist();
     selectedGroup = "All";
     const signedInUser = getSignedInUser();
-    if (signedInUser) showAuthenticatedApp(signedInUser);
+    if (useApiAuth) {
+      apiRequest("/api/auth/me").then(async result => { showAuthenticatedApp(result.user); await loadApiInventory(); }).catch(() => showAuthScreen());
+    } else if (signedInUser) showAuthenticatedApp(signedInUser);
     else showAuthScreen();
     renderGroupControls();
     renderItems();
@@ -496,15 +541,20 @@ document.querySelector("#importDataInput").addEventListener("change", async even
     event.target.value = "";
   }
 });
-document.querySelector("#resetDataButton").addEventListener("click", () => {
-  if (!window.confirm("Reset all local items and groups to the sample data?")) return;
-  items = starterItems.map(item => ({ ...item, id: crypto.randomUUID(), thumbnail: item.image }));
-  fieldDefinitions = structuredClone(starterGroups);
-  persist();
-  selectedGroup = "All";
-  renderGroupControls();
-  renderItems();
-  renderCustomFields();
+document.querySelector("#resetDataButton").addEventListener("click", async () => {
+  if (!window.confirm("Delete all items and groups and leave this inventory empty?")) return;
+  if (useApiAuth) {
+    await apiRequest("/api/inventory", { method: "DELETE" });
+    await loadApiInventory();
+  } else {
+    items = [];
+    fieldDefinitions = {};
+    persist();
+    selectedGroup = "All";
+    renderGroupControls();
+    renderItems();
+    renderCustomFields();
+  }
   closeModal(settingsModal);
 });
 grid.addEventListener("click", event => {
@@ -592,11 +642,26 @@ document.querySelector("#itemForm").addEventListener("submit", async event => {
   }
   const existing = editingItemId && items.find(item => item.id === editingItemId);
   const updated = { ...(existing || {}), id: existing?.id || crypto.randomUUID(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, price: existing?.price || "—", image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
+  if (useApiAuth) {
+    const payload = JSON.stringify({ name: updated.name, group: updated.group, quantity: updated.quantity, values: updated.values });
+    const result = existing
+      ? await apiRequest(`/api/items/${encodeURIComponent(existing.id)}`, { method: "PUT", body: payload })
+      : await apiRequest("/api/items", { method: "POST", body: payload });
+    Object.assign(updated, result.item, { detail: `${result.item.quantity} in stock`, price: "—", thumbnail: fallbackImage, image: fallbackImage });
+    if (file) {
+      const uploadData = new FormData();
+      uploadData.append("image", file);
+      const imageResult = await fetch(`/api/items/${encodeURIComponent(result.item.id)}/image`, { method: "POST", credentials: "same-origin", body: uploadData });
+      if (!imageResult.ok) throw new Error((await imageResult.json()).error || "The image upload failed.");
+      const imageUrls = await imageResult.json();
+      Object.assign(updated, { thumbnail: imageUrls.thumbnailUrl, image: imageUrls.originalUrl, originalImage: imageUrls.originalUrl });
+    }
+  }
   items = existing ? items.map(item => item.id === existing.id ? updated : item) : [updated, ...items];
   persist(); closeModal(modal); event.target.reset(); resetPhotoPreview(); selectedGroup = "All"; renderGroupControls(); renderItems(); renderCustomFields();
   editingItemId = null;
 });
-document.querySelector("#groupForm").addEventListener("submit", event => {
+document.querySelector("#groupForm").addEventListener("submit", async event => {
   event.preventDefault();
   const data = new FormData(event.target);
   const name = data.get("groupName").trim();
@@ -610,6 +675,11 @@ document.querySelector("#groupForm").addEventListener("submit", event => {
     const precision = type === "decimal" ? Math.min(8, Math.max(0, Number(row.querySelector('[name="precision"]').value) || 0)) : type === "currency" ? 2 : undefined;
     return { label, name: label.toLowerCase().replace(/[^a-z0-9]+/g, "-"), type, options, showInDashboard: row.querySelector('[name="showInDashboard"]').checked, ...(precision === undefined ? {} : { precision }), placeholder: `Enter ${label.toLowerCase()}` };
   });
+  if (useApiAuth) {
+    const payload = JSON.stringify(groupPayload(name, updatedFields));
+    if (editingGroupName) await apiRequest(`/api/groups/${encodeURIComponent(editingGroupName)}`, { method: "PUT", body: payload });
+    else await apiRequest("/api/groups", { method: "POST", body: payload });
+  }
   if (editingGroupName && editingGroupName !== name) items = items.map(item => item.group === editingGroupName ? { ...item, group: name } : item);
   if (editingGroupName && editingGroupName !== name) delete fieldDefinitions[editingGroupName];
   fieldDefinitions[name] = updatedFields;
