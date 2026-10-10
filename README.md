@@ -16,6 +16,7 @@ custom fields, photos, thumbnails, filtering, and grid/list views.
   - Dashboard visibility and drag-and-drop field ordering.
 - Item management with quantities, custom values, photos, and generated thumbnails.
 - Search, group tabs, stock/photo filters, sorting, and grid/list views.
+- Activity history for item additions, edits, deletions, and searchable item names/groups.
 - JSON-only backup export/import and ZIP backup export/import with item photos.
 - PostgreSQL for application data.
 - Local filesystem storage for uploaded originals and thumbnails.

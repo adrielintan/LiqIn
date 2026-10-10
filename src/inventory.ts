@@ -43,6 +43,26 @@ function respondError(response: Response, error: unknown): void {
   response.status(400).json({ error: error instanceof Error ? error.message : "Invalid inventory data." });
 }
 
+async function recordItemActivity(userId: string, itemId: string, action: "added" | "modified" | "deleted", itemName: string, groupName: string): Promise<void> {
+  await pool.query(
+    "INSERT INTO item_activity (user_id, item_id, action, item_name, group_name) VALUES ($1, $2, $3, $4, $5)",
+    [userId, itemId, action, itemName, groupName]
+  );
+}
+
+export async function listActivity(request: AuthenticatedRequest, response: Response): Promise<void> {
+  const search = typeof request.query.search === "string" ? request.query.search.trim() : "";
+  const result = await pool.query(
+    `SELECT id, item_id AS "itemId", action, item_name AS "itemName", group_name AS "groupName", created_at AS "createdAt"
+     FROM item_activity
+     WHERE user_id = $1 AND ($2 = '' OR item_name ILIKE '%' || $2 || '%' OR group_name ILIKE '%' || $2 || '%')
+     ORDER BY created_at DESC
+     LIMIT 200`,
+    [userId(request), search]
+  );
+  response.json({ activity: result.rows });
+}
+
 export async function listInventory(request: AuthenticatedRequest, response: Response): Promise<void> {
   const id = userId(request);
   const groups = await pool.query(
@@ -128,6 +148,10 @@ export async function importInventory(request: AuthenticatedRequest, response: R
           [groupId, item.name.trim(), item.quantity, JSON.stringify(item.values || {})]
         );
         importedItems.push({ ...result.rows[0], group: item.group, sourceIndex });
+        await client.query(
+          "INSERT INTO item_activity (user_id, item_id, action, item_name, group_name) VALUES ($1, $2, 'added', $3, $4)",
+          [userId(request), result.rows[0].id, result.rows[0].name, item.group]
+        );
       }
       await client.query("COMMIT");
       await Promise.allSettled(oldImages.rows.flatMap(row => [fs.unlink(row.original_path), fs.unlink(row.thumbnail_path)]));
@@ -230,6 +254,7 @@ export async function createItem(request: AuthenticatedRequest, response: Respon
       [name.trim(), userId(request), quantity, JSON.stringify(values || {}), group]
     );
     if (!result.rows[0]) throw new Error("Group not found.");
+    await recordItemActivity(userId(request), result.rows[0].id, "added", result.rows[0].name, group);
     response.status(201).json({ item: { ...result.rows[0], group } });
   } catch (error) {
     respondError(response, error);
@@ -247,6 +272,7 @@ export async function updateItem(request: AuthenticatedRequest, response: Respon
       [name, quantity, JSON.stringify(values || {}), request.params.id, userId(request), group]
     );
     if (!result.rows[0]) throw new Error("Item not found.");
+    await recordItemActivity(userId(request), result.rows[0].id, "modified", result.rows[0].name, result.rows[0].group);
     response.json({ item: result.rows[0] });
   } catch (error) {
     respondError(response, error);
@@ -256,11 +282,16 @@ export async function updateItem(request: AuthenticatedRequest, response: Respon
 export async function deleteItem(request: AuthenticatedRequest, response: Response): Promise<void> {
   const itemId = String(request.params.id);
   const image = await pool.query("SELECT original_path, thumbnail_path FROM item_images WHERE item_id = $1", [itemId]);
+  const item = await pool.query(
+    `SELECT i.name, g.name AS "group" FROM items i JOIN groups g ON g.id = i.group_id WHERE i.id = $1 AND g.user_id = $2`,
+    [itemId, userId(request)]
+  );
   const result = await pool.query("DELETE FROM items i USING groups g WHERE i.id = $1 AND i.group_id = g.id AND g.user_id = $2", [itemId, userId(request)]);
   if (!result.rowCount) {
     response.status(404).json({ error: "Item not found." });
     return;
   }
+  await recordItemActivity(userId(request), itemId, "deleted", item.rows[0].name, item.rows[0].group);
   await Promise.allSettled(image.rows.flatMap(row => [fs.unlink(row.original_path), fs.unlink(row.thumbnail_path)]));
   response.status(204).end();
 }

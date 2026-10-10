@@ -144,6 +144,7 @@ const currencyOptions = ["USD", "EUR", "GBP", "IDR", "JPY", "AUD", "CAD", "CHF",
 const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480'%3E%3Crect width='480' height='480' fill='%23eef0ed'/%3E%3C/svg%3E";
 let items = (JSON.parse(localStorage.getItem("liqin-items") || "[]")).map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
 let fieldDefinitions = JSON.parse(localStorage.getItem("liqin-groups") || "{}");
+let activity = JSON.parse(localStorage.getItem("liqin-activity") || "[]");
 Object.keys(fieldDefinitions).forEach(group => {
   fieldDefinitions[group] = (fieldDefinitions[group] || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }));
 });
@@ -188,6 +189,20 @@ document.addEventListener("pointerup", () => {
 function persist() {
   localStorage.setItem("liqin-items", JSON.stringify(items));
   localStorage.setItem("liqin-groups", JSON.stringify(fieldDefinitions));
+  localStorage.setItem("liqin-activity", JSON.stringify(activity));
+}
+function recordActivity(action, item) {
+  activity = [{ id: createId(), itemId: item.id, action, itemName: item.name, groupName: item.group, createdAt: new Date().toISOString() }, ...activity].slice(0, 200);
+}
+function activityActionLabel(action) {
+  return action === "added" ? "Added" : action === "modified" ? "Modified" : "Deleted";
+}
+function renderActivity() {
+  const query = document.querySelector("#activitySearchInput").value.trim().toLowerCase();
+  const visible = activity.filter(entry => `${entry.itemName} ${entry.groupName}`.toLowerCase().includes(query));
+  document.querySelector("#activityList").innerHTML = visible.length
+    ? visible.map(entry => `<article class="activity-entry"><span class="activity-marker ${entry.action}">${entry.action === "added" ? "+" : entry.action === "modified" ? "↻" : "−"}</span><div><strong>${escapeHtml(activityActionLabel(entry.action))} ${escapeHtml(entry.itemName)}</strong><small>${escapeHtml(entry.groupName)} · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</small></div></article>`).join("")
+    : '<div class="empty-state">No activity found.</div>';
 }
 async function loadApiInventory() {
   const data = await apiRequest("/api/inventory");
@@ -197,6 +212,12 @@ async function loadApiInventory() {
   renderGroupControls();
   renderItems();
   renderCustomFields();
+  await loadApiActivity();
+}
+async function loadApiActivity(search = "") {
+  const data = await apiRequest(`/api/activity${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+  activity = data.activity || [];
+  renderActivity();
 }
 function groupPayload(name, fields) {
   return { name, fields: fields.map(field => ({ label: field.label, name: field.name, type: field.type, options: field.options || [], precision: field.precision, showInDashboard: field.showInDashboard === true, placeholder: field.placeholder })) };
@@ -425,8 +446,9 @@ function renderDetail(item) {
   document.querySelector("#deleteItemButton").addEventListener("click", async () => {
     if (!window.confirm(`Delete ${item.name}?`)) return;
     if (useApiAuth) await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+    if (!useApiAuth) recordActivity("deleted", item);
     items = items.filter(candidate => candidate.id !== item.id);
-    persist(); closeModal(detailModal); renderGroupControls(); renderItems();
+    persist(); closeModal(detailModal); renderGroupControls(); renderItems(); if (useApiAuth) await loadApiActivity();
   });
 }
 function createThumbnail(file) {
@@ -578,6 +600,34 @@ document.querySelector(".sidebar-close").addEventListener("click", () => {
 });
 document.querySelector(".main-nav").addEventListener("click", () => {
   document.querySelector(".app-shell").classList.remove("sidebar-open");
+});
+document.querySelector("#activityLink").addEventListener("click", event => {
+  event.preventDefault();
+  document.querySelector("#activitySection").hidden = false;
+  document.querySelector(".inventory-section").hidden = true;
+  document.querySelector(".page-heading").hidden = true;
+  document.querySelectorAll(".main-nav .nav-item").forEach(item => item.classList.remove("active"));
+  document.querySelector("#activityLink").classList.add("active");
+  renderActivity();
+});
+document.querySelector(".main-nav .nav-item:first-child").addEventListener("click", event => {
+  event.preventDefault();
+  document.querySelector("#activitySection").hidden = true;
+  document.querySelector(".inventory-section").hidden = false;
+  document.querySelector(".page-heading").hidden = false;
+  document.querySelectorAll(".main-nav .nav-item").forEach(item => item.classList.remove("active"));
+  event.currentTarget.classList.add("active");
+});
+document.querySelector("#activitySearchInput").addEventListener("input", async event => {
+  if (useApiAuth) {
+    try {
+      await loadApiActivity(event.target.value);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Unable to search activity.");
+    }
+    return;
+  }
+  renderActivity();
 });
 document.querySelector("#profileTrigger").addEventListener("click", () => {
   const dropdown = document.querySelector("#profileDropdown");
@@ -928,7 +978,9 @@ document.querySelector("#itemForm").addEventListener("submit", async event => {
       }
     }
     items = existing ? items.map(item => item.id === existing.id ? updated : item) : [updated, ...items];
+    if (!useApiAuth) recordActivity(existing ? "modified" : "added", updated);
     persist(); closeModal(modal); event.target.reset(); resetPhotoPreview(); selectedGroup = "All"; renderGroupControls(); renderItems(); renderCustomFields();
+    if (useApiAuth) await loadApiActivity();
     editingItemId = null;
   } catch (error) {
     window.alert(error instanceof Error ? error.message : "Unable to save the item.");
@@ -968,6 +1020,7 @@ document.querySelector("#groupForm").addEventListener("submit", async event => {
 renderGroupControls();
 renderItems();
 renderCustomFields();
+renderActivity();
 async function initializeAuthentication() {
   if (!useApiAuth) {
     const signedInUser = getSignedInUser();

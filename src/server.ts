@@ -4,7 +4,7 @@ import helmet from "helmet";
 import { config } from "./config.js";
 import { checkDatabase } from "./db.js";
 import { changePassword, currentUser, login, logout, register, requireUser } from "./auth.js";
-import { createGroup, createItem, deleteGroup, deleteItem, importInventory, listInventory, resetInventory, updateGroup, updateItem } from "./inventory.js";
+import { createGroup, createItem, deleteGroup, deleteItem, importInventory, listActivity, listInventory, resetInventory, updateGroup, updateItem } from "./inventory.js";
 import { downloadImage, uploadImage } from "./images.js";
 
 const app = express();
@@ -26,6 +26,7 @@ app.post("/api/auth/logout", logout);
 app.get("/api/auth/me", requireUser, currentUser);
 app.post("/api/auth/password", requireUser, changePassword);
 app.get("/api/inventory", requireUser, listInventory);
+app.get("/api/activity", requireUser, listActivity);
 app.delete("/api/inventory", requireUser, resetInventory);
 app.post("/api/inventory/import", requireUser, importInventory);
 app.post("/api/groups", requireUser, createGroup);
