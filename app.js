@@ -75,7 +75,6 @@ function showAuthenticatedApp(user) {
   const initials = displayName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   document.querySelector("#profileName").textContent = displayName;
   document.querySelector("#profileAvatar").textContent = initials;
-  document.querySelector("#topAvatar").textContent = initials;
 }
 function showAuthScreen() {
   authScreen.hidden = false;
@@ -226,7 +225,7 @@ function renderItems() {
       (filters.group === "All" || item.group === filters.group) &&
       (filters.stock === "all" || (filters.stock === "in" && quantity > 0) || (filters.stock === "low" && quantity > 0 && quantity <= 2)) &&
       (filters.photo === "all" || (filters.photo === "with" && hasPhoto) || (filters.photo === "without" && !hasPhoto)) &&
-      `${item.name} ${item.group}`.toLowerCase().includes(query);
+      `${item.name} ${item.group} ${JSON.stringify(item.values || {})}`.toLowerCase().includes(query);
   });
   visible.sort((a, b) => {
     if (filters.sort === "name") return a.name.localeCompare(b.name);
@@ -237,7 +236,6 @@ function renderItems() {
   grid.classList.toggle("list-view", currentView === "list");
   grid.innerHTML = visible.length ? visible.map(item => `<article class="item-card" data-item-id="${item.id}"><button class="item-card-button" type="button" aria-label="Open ${escapeHtml(item.name)}"><div class="bottle-image"><img src="${escapeHtml(item.thumbnail || item.image)}" alt="${escapeHtml(item.name)}" loading="lazy"><span class="item-group">${escapeHtml(item.group)}</span></div><div class="card-body"><h3>${escapeHtml(item.name)}</h3><div class="card-meta"><span>${escapeHtml(item.detail)}</span><strong>${escapeHtml(item.price)}</strong></div>${renderDashboardFields(item) ? `<div class="dashboard-fields">${renderDashboardFields(item)}</div>` : ""}</div></button></article>`).join("") : '<div class="empty-state">No items found in this view.</div>';
   document.querySelector("#itemTotalLabel").textContent = visible.length;
-  document.querySelector("#totalItems").textContent = items.length;
 }
 function renderGroupControls() {
   const names = groupNames();
@@ -245,7 +243,6 @@ function renderGroupControls() {
   document.querySelector("#filterGroup").innerHTML = `<option value="All">All groups</option>${names.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
   document.querySelector("#filterGroup").value = filters.group;
   document.querySelector("#groupCount").textContent = names.length;
-  document.querySelector("#groupsTotal").textContent = names.length;
   document.querySelector("#groupTabs").innerHTML = [`<button class="tab active" data-group="All">All <span>${items.length}</span></button>`, ...names.map(name => `<button class="tab" data-group="${escapeHtml(name)}">${escapeHtml(name)} <span>${items.filter(item => item.group === name).length}</span></button>`)].join("");
 }
 function renderCustomFields() {
@@ -580,6 +577,24 @@ document.querySelector(".sidebar-close").addEventListener("click", () => {
 document.querySelector(".main-nav").addEventListener("click", () => {
   document.querySelector(".app-shell").classList.remove("sidebar-open");
 });
+document.querySelector("#profileTrigger").addEventListener("click", () => {
+  const dropdown = document.querySelector("#profileDropdown");
+  const isOpen = !dropdown.hidden;
+  dropdown.hidden = isOpen;
+  document.querySelector("#profileTrigger").setAttribute("aria-expanded", String(!isOpen));
+});
+document.querySelector("#settingsLink").addEventListener("click", event => {
+  event.preventDefault();
+  document.querySelector("#profileDropdown").hidden = true;
+  document.querySelector("#profileTrigger").setAttribute("aria-expanded", "false");
+  openModal(settingsModal);
+});
+document.addEventListener("click", event => {
+  if (!event.target.closest(".profile-menu")) {
+    document.querySelector("#profileDropdown").hidden = true;
+    document.querySelector("#profileTrigger").setAttribute("aria-expanded", "false");
+  }
+});
 document.querySelector(".main-content").addEventListener("click", event => {
   if (event.target.closest(".mobile-menu")) return;
   document.querySelector(".app-shell").classList.remove("sidebar-open");
@@ -595,7 +610,6 @@ document.querySelector("#barcodeCameraSelect").addEventListener("change", async 
     document.querySelector("#barcodeMessage").textContent = "Unable to use that camera. Choose another camera or enter the barcode manually.";
   }
 });
-document.querySelector("#settingsLink").addEventListener("click", event => { event.preventDefault(); openModal(settingsModal); });
 document.querySelector("#closeSettingsModal").addEventListener("click", () => closeModal(settingsModal));
 document.querySelector("#passwordForm").addEventListener("submit", async event => {
   event.preventDefault();

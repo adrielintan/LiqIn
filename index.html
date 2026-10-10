@@ -36,39 +36,34 @@
       <aside class="sidebar">
         <button type="button" class="sidebar-close" aria-label="Close menu">×</button>
         <div class="brand"><span class="brand-mark">L</span><span>LiqIn</span></div>
+        <div class="profile-menu">
+          <button type="button" class="profile-trigger" id="profileTrigger" aria-expanded="false" aria-controls="profileDropdown">
+            <span class="avatar" id="profileAvatar">AS</span><span class="profile-identity"><strong id="profileName">Alex Smith</strong><small>Admin</small></span><span class="profile-chevron">⌄</span>
+          </button>
+          <div class="profile-dropdown" id="profileDropdown" hidden>
+            <a class="nav-item settings" href="#settings" id="settingsLink"><span class="nav-icon">⚙</span>Settings</a>
+            <button type="button" class="nav-item logout-button" id="logoutButton"><span class="nav-icon">↪</span>Log out</button>
+          </div>
+        </div>
         <nav class="main-nav" aria-label="Main navigation">
           <a class="nav-item active" href="#"><span class="nav-icon">⌂</span>Overview</a>
           <a class="nav-item" href="#groups" id="manageGroupsLink"><span class="nav-icon">◈</span>Groups <span class="nav-count" id="groupCount">6</span></a>
           <a class="nav-item" href="#activity"><span class="nav-icon">↗</span>Activity</a>
         </nav>
-        <div class="sidebar-bottom">
-          <a class="nav-item settings" href="#settings" id="settingsLink"><span class="nav-icon">⚙</span>Settings</a>
-          <div class="profile"><div class="avatar" id="profileAvatar">AS</div><div><strong id="profileName">Alex Smith</strong><small>Admin</small></div><button type="button" class="logout-button" id="logoutButton">Log out</button></div>
-        </div>
       </aside>
 
       <main class="main-content">
         <header class="topbar">
           <button class="mobile-menu" aria-label="Open menu">☰</button>
           <div class="breadcrumbs"><span>Inventory</span><span>/</span><strong>All items</strong></div>
-          <div class="topbar-actions">
-            <div class="top-avatar" id="topAvatar">AS</div>
-          </div>
         </header>
 
         <section class="page-heading">
           <div>
-            <p class="eyebrow">Saturday, October 12, 2024</p>
             <h1>Your collection<span class="accent-dot">.</span></h1>
             <p class="subtitle">A clear view of everything in your cellar.</p>
           </div>
           <button class="primary-button" id="addItemButton"><span>＋</span> Add item</button>
-        </section>
-
-        <section class="stats-row" aria-label="Inventory summary">
-          <div class="stat-card"><div class="stat-icon amber">◒</div><div><span>Total items</span><strong id="totalItems">24</strong></div><small class="positive">↑ 3 this month</small></div>
-          <div class="stat-card"><div class="stat-icon green">▣</div><div><span>Groups</span><strong id="groupsTotal">6</strong></div><small>Organized your way</small></div>
-          <div class="stat-card"><div class="stat-icon purple">⌁</div><div><span>Est. collection value</span><strong>$4,280</strong></div><small class="positive">↑ 8.2% value</small></div>
         </section>
 
         <section class="inventory-section">
