@@ -12,6 +12,7 @@ type FieldInput = {
   showInDashboard?: unknown;
   placeholder?: unknown;
 };
+type FieldDefinition = { label?: string; name: string; type: string; options?: string[] };
 
 function userId(request: AuthenticatedRequest): string {
   if (!request.user) throw new Error("Authenticated user is missing.");
@@ -41,6 +42,49 @@ function normalizeFields(input: unknown): Array<Record<string, unknown>> {
 
 function respondError(response: Response, error: unknown): void {
   response.status(400).json({ error: error instanceof Error ? error.message : "Invalid inventory data." });
+}
+
+function migrateFieldValue(value: unknown, oldField: FieldDefinition, newField: FieldDefinition): { value: unknown; warning?: string } {
+  if (value === null || value === undefined || value === "") return { value };
+  if (oldField.type === newField.type) return { value };
+  if (["text", "barcode", "date", "year"].includes(newField.type) && (typeof value === "string" || typeof value === "number")) return { value: String(value) };
+  if (["integer", "decimal"].includes(newField.type)) {
+    const candidate = typeof value === "object" && value !== null && "amount" in value ? Number((value as { amount: unknown }).amount) : Number(value);
+    if (Number.isFinite(candidate) && (newField.type !== "integer" || Number.isInteger(candidate))) return { value: String(candidate) };
+  }
+  if (newField.type === "currency") {
+    if (typeof value === "object" && value !== null && "amount" in value) return { value };
+    const candidate = Number(value);
+    if (Number.isFinite(candidate)) return { value: { amount: String(candidate), currency: "USD" } };
+  }
+  if (newField.type === "single" && typeof value === "string" && (!newField.options?.length || newField.options.includes(value))) return { value };
+  if (newField.type === "multiple") {
+    const values = Array.isArray(value) ? value : [value];
+    if (values.every(option => typeof option === "string") && (!newField.options?.length || values.every(option => newField.options!.includes(option)))) return { value: values };
+  }
+  return { value, warning: `The value for "${oldField.label || oldField.name}" could not be converted to ${newField.type}.` };
+}
+
+async function migrateGroupItemValues(client: { query: (text: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> }, groupId: string, oldFields: FieldDefinition[], newFields: FieldDefinition[]): Promise<string[]> {
+  const result = await client.query("SELECT id, name, values FROM items WHERE group_id = $1", [groupId]);
+  const warnings: string[] = [];
+  for (const item of result.rows) {
+    const values = { ...((item.values || {}) as Record<string, unknown>) };
+    newFields.forEach((newField, index) => {
+      const oldField = oldFields[index];
+      if (!oldField || !Object.prototype.hasOwnProperty.call(values, oldField.name)) return;
+      if (oldField.name !== newField.name && Object.prototype.hasOwnProperty.call(values, newField.name)) {
+        warnings.push(`"${item.name}" already has a value for "${newField.name}"; the old value was kept under "${oldField.name}".`);
+        return;
+      }
+      const migrated = migrateFieldValue(values[oldField.name], oldField, newField);
+      if (migrated.warning) warnings.push(`"${item.name}": ${migrated.warning}`);
+      if (oldField.name !== newField.name) delete values[oldField.name];
+      values[newField.name] = migrated.value;
+    });
+    await client.query("UPDATE items SET values = $1::jsonb, updated_at = now() WHERE id = $2", [JSON.stringify(values), item.id]);
+  }
+  return warnings;
 }
 
 async function recordItemActivity(userId: string, itemId: string, action: "added" | "modified" | "deleted", itemName: string, groupName: string): Promise<void> {
@@ -210,11 +254,13 @@ export async function updateGroup(request: AuthenticatedRequest, response: Respo
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      const previousFieldsResult = await client.query("SELECT label, field_name AS name, field_type AS type, options FROM group_fields WHERE group_id = (SELECT id FROM groups WHERE user_id = $1 AND name = $2)", [userId(request), decodeURIComponent(String(request.params.name))]);
       const result = await client.query("UPDATE groups SET name = $1, updated_at = now() WHERE user_id = $2 AND name = $3 RETURNING id, name", [name, userId(request), decodeURIComponent(String(request.params.name))]);
       if (!result.rows[0]) throw new Error("Group not found.");
+      const warnings = await migrateGroupItemValues(client, result.rows[0].id, previousFieldsResult.rows as FieldDefinition[], fields as FieldDefinition[]);
       await replaceFields(client, result.rows[0].id, fields);
       await client.query("COMMIT");
-      response.json({ group: { ...result.rows[0], fields } });
+      response.json({ group: { ...result.rows[0], fields }, warnings });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

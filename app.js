@@ -229,6 +229,42 @@ async function loadApiActivity(search = "") {
 function groupPayload(name, fields) {
   return { name, fields: fields.map(field => ({ label: field.label, name: field.name, type: field.type, options: field.options || [], precision: field.precision, showInDashboard: field.showInDashboard === true, placeholder: field.placeholder })) };
 }
+function migrateGroupItems(oldGroupName, newGroupName, oldFields, newFields) {
+  const warnings = [];
+  items = items.map(item => {
+    if (item.group !== oldGroupName) return item;
+    const values = { ...(item.values || {}) };
+    newFields.forEach((newField, index) => {
+      const oldField = oldFields[index];
+      if (!oldField || !Object.prototype.hasOwnProperty.call(values, oldField.name)) return;
+      if (oldField.name !== newField.name && Object.prototype.hasOwnProperty.call(values, newField.name)) {
+        warnings.push(`"${item.name}" already has a value for "${newField.name}"; the old value was kept under "${oldField.name}".`);
+        return;
+      }
+      const value = values[oldField.name];
+      let migrated = value;
+      let convertible = oldField.type === newField.type;
+      if (["text", "barcode", "date", "year"].includes(newField.type) && (typeof value === "string" || typeof value === "number")) {
+        migrated = String(value);
+        convertible = true;
+      } else if (["integer", "decimal"].includes(newField.type)) {
+        const candidate = Number(value && typeof value === "object" ? value.amount : value);
+        convertible = Number.isFinite(candidate) && (newField.type !== "integer" || Number.isInteger(candidate));
+        if (convertible) migrated = String(candidate);
+      } else if (newField.type === "currency") {
+        const candidate = value && typeof value === "object" ? value.amount : value;
+        if (value && typeof value === "object" && value.amount !== undefined) convertible = true;
+        else if (Number.isFinite(Number(candidate))) { migrated = { amount: String(candidate), currency: "USD" }; convertible = true; }
+      } else if (newField.type === "single") convertible = typeof value === "string" && (!newField.options?.length || newField.options.includes(value));
+      else if (newField.type === "multiple") convertible = Array.isArray(value) && value.every(option => typeof option === "string") && (!newField.options?.length || value.every(option => newField.options.includes(option)));
+      if (!convertible) warnings.push(`"${item.name}": The value for "${oldField.label || oldField.name}" could not be converted to ${newField.type}.`);
+      if (oldField.name !== newField.name) delete values[oldField.name];
+      values[newField.name] = migrated;
+    });
+    return { ...item, group: newGroupName, values };
+  });
+  return warnings;
+}
 function groupNames() { return Object.keys(fieldDefinitions); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character])); }
 function formatFieldValue(field, value) {
@@ -1042,16 +1078,22 @@ document.querySelector("#groupForm").addEventListener("submit", async event => {
       const precision = type === "decimal" ? Math.min(8, Math.max(0, Number(row.querySelector('[name="precision"]').value) || 0)) : type === "currency" ? 2 : undefined;
       return { label, name: label.toLowerCase().replace(/[^a-z0-9]+/g, "-"), type, options, showInDashboard: row.querySelector('[name="showInDashboard"]').checked, ...(precision === undefined ? {} : { precision }), placeholder: `Enter ${label.toLowerCase()}` };
     });
+    const previousFields = editingGroupName ? fieldDefinitions[editingGroupName] || [] : [];
+    let migrationWarnings = [];
     if (useApiAuth) {
       const payload = JSON.stringify(groupPayload(name, updatedFields));
-      if (editingGroupName) await apiRequest(`/api/groups/${encodeURIComponent(editingGroupName)}`, { method: "PUT", body: payload });
+      if (editingGroupName) {
+        const result = await apiRequest(`/api/groups/${encodeURIComponent(editingGroupName)}`, { method: "PUT", body: payload });
+        migrationWarnings = result.warnings || [];
+      }
       else await apiRequest("/api/groups", { method: "POST", body: payload });
     }
-    if (editingGroupName && editingGroupName !== name) items = items.map(item => item.group === editingGroupName ? { ...item, group: name } : item);
+    if (editingGroupName) migrationWarnings = [...migrationWarnings, ...migrateGroupItems(editingGroupName, name, previousFields, updatedFields)];
     if (editingGroupName && editingGroupName !== name) delete fieldDefinitions[editingGroupName];
     fieldDefinitions[name] = updatedFields;
     persist(); closeModal(createGroupModal); event.target.reset(); renderGroupControls(); renderCustomFields(); renderGroupList();
     editingGroupName = null;
+    if (migrationWarnings.length) window.alert(`Some existing values need review:\n\n${migrationWarnings.join("\n")}`);
   } catch (error) {
     window.alert(error instanceof Error ? error.message : "Unable to save the group.");
   }

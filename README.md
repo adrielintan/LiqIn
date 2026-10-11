@@ -13,6 +13,7 @@ custom fields, photos, thumbnails, filtering, and grid/list views.
   - Barcode values support manual entry and camera scanning where the browser provides the Barcode Detection API.
   - Configurable decimal precision.
   - Currency values with selectable currencies and fixed two-decimal precision.
+  - Renaming a field migrates existing item values to the new key. Compatible field type changes are converted safely; incompatible values are preserved and reported for review.
   - Dashboard visibility and drag-and-drop field ordering.
 - Item management with quantities, custom values, photos, and generated thumbnails.
 - Search, group tabs, stock/photo filters, sorting, and grid/list views.
