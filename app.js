@@ -167,6 +167,7 @@ const modal = document.querySelector("#itemModal");
 const barcodeModal = document.querySelector("#barcodeModal");
 const groupModal = document.querySelector("#groupModal");
 const detailModal = document.querySelector("#detailModal");
+const photoLightbox = document.querySelector("#photoLightbox");
 const settingsModal = document.querySelector("#settingsModal");
 const createGroupModal = document.querySelector("#createGroupModal");
 
@@ -354,7 +355,7 @@ function stopBarcodeScanner() {
 function closeModal(target) {
   target.hidden = true;
   if (target === barcodeModal) stopBarcodeScanner();
-  if (modal.hidden && detailModal.hidden && groupModal.hidden && createGroupModal.hidden && settingsModal.hidden && barcodeModal.hidden) document.body.style.overflow = "";
+  if (modal.hidden && detailModal.hidden && photoLightbox.hidden && groupModal.hidden && createGroupModal.hidden && settingsModal.hidden && barcodeModal.hidden) document.body.style.overflow = "";
 }
 function hasValidBarcodeChecksum(value, format) {
   if (!/^\d+$/.test(value)) return format === "qr_code" || format === "code_128";
@@ -484,7 +485,12 @@ function renderDetail(item) {
     if (!value) return "";
     return `<div class="detail-field"><span>${escapeHtml(field.label)}</span><strong>${escapeHtml(formatFieldValue(field, value))}</strong></div>`;
   }).join("");
-  document.querySelector("#detailContent").innerHTML = `<p class="eyebrow">${escapeHtml(item.group)}</p><h2 id="detailTitle">${escapeHtml(item.name)}<span class="accent-dot">.</span></h2><p class="detail-subtitle">${escapeHtml(item.detail)}</p><img class="detail-image" src="${escapeHtml(item.originalImage || item.image)}" alt="${escapeHtml(item.name)}"><div class="detail-fields">${details || '<p class="detail-empty">No custom values recorded for this item.</p>'}</div><div class="modal-actions"><button type="button" class="secondary-button" id="deleteItemButton">Delete item</button><button type="button" class="secondary-button" id="itemLogsButton">Logs</button><button type="button" class="primary-button" id="editItemButton">Edit item <span>→</span></button></div>`;
+  document.querySelector("#detailContent").innerHTML = `<p class="eyebrow">${escapeHtml(item.group)}</p><h2 id="detailTitle">${escapeHtml(item.name)}<span class="accent-dot">.</span></h2><p class="detail-subtitle">${escapeHtml(item.detail)}</p><button type="button" class="detail-photo-button" id="detailPhotoButton" aria-label="View full-size photo"><img class="detail-image" src="${escapeHtml(item.originalImage || item.image)}" alt="${escapeHtml(item.name)}"></button><div class="detail-fields">${details || '<p class="detail-empty">No custom values recorded for this item.</p>'}</div><div class="modal-actions"><button type="button" class="secondary-button" id="deleteItemButton">Delete item</button><button type="button" class="secondary-button" id="itemLogsButton">Logs</button><button type="button" class="primary-button" id="editItemButton">Edit item <span>→</span></button></div>`;
+  document.querySelector("#detailPhotoButton").addEventListener("click", () => {
+    document.querySelector("#fullSizePhoto").src = item.originalImage || item.image;
+    document.querySelector("#fullSizePhoto").alt = item.name;
+    openModal(photoLightbox);
+  });
   document.querySelector("#editItemButton").addEventListener("click", () => { closeModal(detailModal); openItemEditor(item); });
   document.querySelector("#itemLogsButton").addEventListener("click", () => showItemLogs(item));
   document.querySelector("#deleteItemButton").addEventListener("click", async () => {
@@ -726,8 +732,9 @@ document.querySelector(".main-content").addEventListener("click", event => {
   if (event.target.closest(".mobile-menu")) return;
   document.querySelector(".app-shell").classList.remove("sidebar-open");
 });
-[modal, detailModal, groupModal, createGroupModal, settingsModal, barcodeModal].forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) closeModal(dialog); }));
+[modal, detailModal, photoLightbox, groupModal, createGroupModal, settingsModal, barcodeModal].forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) closeModal(dialog); }));
 document.querySelector("#closeDetailModal").addEventListener("click", () => closeModal(detailModal));
+document.querySelector("#closePhotoLightbox").addEventListener("click", () => closeModal(photoLightbox));
 document.querySelector("#closeBarcodeModal").addEventListener("click", () => closeModal(barcodeModal));
 document.querySelector("#cancelBarcodeScan").addEventListener("click", () => closeModal(barcodeModal));
 document.querySelector("#barcodeSearchButton").addEventListener("click", () => startBarcodeScanner(null));
@@ -875,15 +882,31 @@ async function readZip(buffer) {
 async function downloadBackup(blob, filename) {
   const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href);
 }
-document.querySelector("#exportJsonButton").addEventListener("click", async () => {
-  const { backup } = await createBackup(false);
-  await downloadBackup(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }), `liqin-backup-${new Date().toISOString().slice(0, 10)}.json`);
-});
-document.querySelector("#exportZipButton").addEventListener("click", async () => {
-  const { backup, entries } = await createBackup(true);
-  entries.unshift({ name: "backup.json", data: new TextEncoder().encode(JSON.stringify(backup, null, 2)) });
-  await downloadBackup(zipStore(entries), `liqin-backup-${new Date().toISOString().slice(0, 10)}.zip`);
-});
+async function exportBackup(button, includePhotos) {
+  const originalLabel = button.innerHTML;
+  button.disabled = true;
+  button.classList.add("is-loading");
+  button.setAttribute("aria-busy", "true");
+  button.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Preparing export…`;
+  try {
+    const { backup, entries } = await createBackup(includePhotos);
+    if (includePhotos) {
+      entries.unshift({ name: "backup.json", data: new TextEncoder().encode(JSON.stringify(backup, null, 2)) });
+      await downloadBackup(zipStore(entries), `liqin-backup-${new Date().toISOString().slice(0, 10)}.zip`);
+    } else {
+      await downloadBackup(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }), `liqin-backup-${new Date().toISOString().slice(0, 10)}.json`);
+    }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to export the collection.");
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-loading");
+    button.removeAttribute("aria-busy");
+    button.innerHTML = originalLabel;
+  }
+}
+document.querySelector("#exportJsonButton").addEventListener("click", event => exportBackup(event.currentTarget, false));
+document.querySelector("#exportZipButton").addEventListener("click", event => exportBackup(event.currentTarget, true));
 document.querySelector("#importDataInput").addEventListener("change", async event => {
   const file = event.target.files[0];
   if (!file) return;
