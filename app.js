@@ -822,7 +822,16 @@ async function fileAsDataUrl(file) {
   });
 }
 async function createBackup(includePhotos) {
-  const backup = { version: 1, exportedAt: new Date().toISOString(), items: items.map(item => ({ ...item })), groups: fieldDefinitions };
+  const backupItems = items.map(item => {
+    const backupItem = { ...item };
+    if (!item.originalImage || item.originalImage === fallbackImage) {
+      delete backupItem.image;
+      delete backupItem.thumbnail;
+      delete backupItem.originalImage;
+    }
+    return backupItem;
+  });
+  const backup = { version: 1, exportedAt: new Date().toISOString(), items: backupItems, groups: fieldDefinitions };
   if (!includePhotos) return { backup, entries: [] };
   const entries = [];
   for (const [index, item] of backup.items.entries()) {
@@ -887,7 +896,11 @@ document.querySelector("#importDataInput").addEventListener("change", async even
       if (!backupData) throw new Error("The ZIP backup does not contain backup.json.");
       backup = JSON.parse(new TextDecoder().decode(backupData));
       backup.items.forEach(item => {
-        if (typeof item.originalImage === "string" && archiveFiles.has(item.originalImage)) item.originalImage = `data:image/${item.originalImage.split(".").pop()};base64,${bytesToBase64(archiveFiles.get(item.originalImage))}`;
+        if (typeof item.originalImage === "string" && archiveFiles.has(item.originalImage)) {
+          item.originalImage = `data:image/${item.originalImage.split(".").pop()};base64,${bytesToBase64(archiveFiles.get(item.originalImage))}`;
+          item.image = item.originalImage;
+          item.thumbnail = item.originalImage;
+        }
       });
     } else {
       backup = JSON.parse(await file.text());
@@ -911,8 +924,19 @@ document.querySelector("#importDataInput").addEventListener("change", async even
       closeModal(settingsModal);
       return;
     }
-    items = backup.items.map(item => ({ ...item, id: item.id || createId(), thumbnail: item.thumbnail || item.image || fallbackImage }));
-    fieldDefinitions = backup.groups;
+    const mergedItems = [...items];
+    backup.items.forEach(importedItem => {
+      const existingIndex = mergedItems.findIndex(item => (importedItem.id && item.id === importedItem.id) || (item.name === importedItem.name && item.group === importedItem.group));
+      const existing = existingIndex >= 0 ? mergedItems[existingIndex] : null;
+      const importedImage = importedItem.image && importedItem.image !== fallbackImage ? importedItem.image : "";
+      const importedThumbnail = importedItem.thumbnail && importedItem.thumbnail !== fallbackImage ? importedItem.thumbnail : "";
+      const merged = { ...(existing || {}), ...importedItem, id: existing?.id || importedItem.id || createId(), thumbnail: importedThumbnail || importedImage || existing?.thumbnail || existing?.image || fallbackImage, image: importedImage || existing?.image || importedThumbnail || existing?.thumbnail || fallbackImage, originalImage: importedItem.originalImage && importedItem.originalImage !== fallbackImage ? importedItem.originalImage : existing?.originalImage };
+      if (existingIndex >= 0) mergedItems[existingIndex] = merged;
+      else mergedItems.unshift(merged);
+      recordActivity(existing ? "modified" : "added", merged);
+    });
+    items = mergedItems;
+    fieldDefinitions = { ...fieldDefinitions, ...backup.groups };
     Object.keys(fieldDefinitions).forEach(group => {
       fieldDefinitions[group] = (fieldDefinitions[group] || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }));
     });

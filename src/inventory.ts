@@ -171,15 +171,14 @@ export async function importInventory(request: AuthenticatedRequest, response: R
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const oldImages = await client.query(
-        "SELECT im.original_path, im.thumbnail_path FROM item_images im JOIN items i ON i.id = im.item_id JOIN groups g ON g.id = i.group_id WHERE g.user_id = $1",
-        [userId(request)]
-      );
-      await client.query("DELETE FROM items USING groups WHERE items.group_id = groups.id AND groups.user_id = $1", [userId(request)]);
-      await client.query("DELETE FROM groups WHERE user_id = $1", [userId(request)]);
       const groupIds = new Map<string, string>();
       for (const group of groups) {
-        const result = await client.query("INSERT INTO groups (user_id, name) VALUES ($1, $2) RETURNING id", [userId(request), group.name]);
+        const result = await client.query(
+          `INSERT INTO groups (user_id, name) VALUES ($1, $2)
+           ON CONFLICT (user_id, name) DO UPDATE SET updated_at = now()
+           RETURNING id`,
+          [userId(request), group.name]
+        );
         groupIds.set(group.name, result.rows[0].id);
         await replaceFields(client, result.rows[0].id, group.fields);
       }
@@ -187,19 +186,31 @@ export async function importInventory(request: AuthenticatedRequest, response: R
       for (const [sourceIndex, item] of backup.items.entries()) {
         const groupId = groupIds.get(item.group);
         if (!groupId) throw new Error(`The item "${item.name}" references an unknown group.`);
-        const result = await client.query(
-          `INSERT INTO items (group_id, name, quantity, values) VALUES ($1, $2, GREATEST(0, COALESCE($3::integer, 1)), COALESCE($4::jsonb, '{}'::jsonb))
-           RETURNING id, name, group_id, quantity, values`,
-          [groupId, item.name.trim(), item.quantity, JSON.stringify(item.values || {})]
-        );
+        const existing = typeof item.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id)
+          ? await client.query(
+            "SELECT i.id FROM items i JOIN groups g ON g.id = i.group_id WHERE i.id = $1 AND g.user_id = $2",
+            [item.id, userId(request)]
+          )
+          : { rows: [] };
+        const result = existing.rows[0]
+          ? await client.query(
+            `UPDATE items SET group_id = $1, name = $2, quantity = GREATEST(0, COALESCE($3::integer, 1)), values = COALESCE($4::jsonb, '{}'::jsonb), updated_at = now()
+             WHERE id = $5
+             RETURNING id, name, group_id, quantity, values`,
+            [groupId, item.name.trim(), item.quantity, JSON.stringify(item.values || {}), existing.rows[0].id]
+          )
+          : await client.query(
+            `INSERT INTO items (group_id, name, quantity, values) VALUES ($1, $2, GREATEST(0, COALESCE($3::integer, 1)), COALESCE($4::jsonb, '{}'::jsonb))
+             RETURNING id, name, group_id, quantity, values`,
+            [groupId, item.name.trim(), item.quantity, JSON.stringify(item.values || {})]
+          );
         importedItems.push({ ...result.rows[0], group: item.group, sourceIndex });
         await client.query(
-          "INSERT INTO item_activity (user_id, item_id, action, item_name, group_name) VALUES ($1, $2, 'added', $3, $4)",
-          [userId(request), result.rows[0].id, result.rows[0].name, item.group]
+          "INSERT INTO item_activity (user_id, item_id, action, item_name, group_name) VALUES ($1, $2, $3, $4, $5)",
+          [userId(request), result.rows[0].id, existing.rows[0] ? "modified" : "added", result.rows[0].name, item.group]
         );
       }
       await client.query("COMMIT");
-      await Promise.allSettled(oldImages.rows.flatMap(row => [fs.unlink(row.original_path), fs.unlink(row.thumbnail_path)]));
       response.status(201).json({ items: importedItems });
     } catch (error) {
       await client.query("ROLLBACK");

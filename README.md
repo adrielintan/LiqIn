@@ -215,8 +215,11 @@ images, and an upload backup without the database will not preserve their
 metadata.
 
 The application also provides JSON backup export/import in Settings. This
-contains groups, items, field definitions, and values. Embedded images are
-uploaded through the authenticated image API during import.
+contains groups, items, field definitions, and values. Import merges groups and
+items by their stable IDs (or matching names in the local prototype), preserving
+existing items and photos that are not included in the import. Embedded images
+are uploaded through the authenticated image API during import and replace a
+photo only when the imported backup contains one.
 
 The **Clear inventory** action removes the current user's groups, items, custom
 fields, image metadata, and uploaded image files. It does not delete the user
