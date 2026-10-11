@@ -197,17 +197,24 @@ function recordActivity(action, item) {
 function activityActionLabel(action) {
   return action === "added" ? "Added" : action === "modified" ? "Modified" : "Deleted";
 }
+function renderActivityEntry(entry) {
+  const item = items.find(candidate => candidate.id === entry.itemId);
+  const itemName = item
+    ? `<button type="button" class="activity-item-link" data-activity-item-id="${escapeHtml(item.id)}">${escapeHtml(entry.itemName)}</button>`
+    : escapeHtml(entry.itemName);
+  return `<article class="activity-entry"><span class="activity-marker ${entry.action}">${entry.action === "added" ? "+" : entry.action === "modified" ? "↻" : "−"}</span><div><strong>${escapeHtml(activityActionLabel(entry.action))} ${itemName}</strong><small>${escapeHtml(entry.groupName)} · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</small></div></article>`;
+}
 function renderActivity() {
   const query = document.querySelector("#activitySearchInput").value.trim().toLowerCase();
   const visible = activity.filter(entry => `${entry.itemName} ${entry.groupName}`.toLowerCase().includes(query));
   document.querySelector("#activityList").innerHTML = visible.length
-    ? visible.map(entry => `<article class="activity-entry"><span class="activity-marker ${entry.action}">${entry.action === "added" ? "+" : entry.action === "modified" ? "↻" : "−"}</span><div><strong>${escapeHtml(activityActionLabel(entry.action))} ${escapeHtml(entry.itemName)}</strong><small>${escapeHtml(entry.groupName)} · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</small></div></article>`).join("")
+    ? visible.map(renderActivityEntry).join("")
     : '<div class="empty-state">No activity found.</div>';
 }
 async function loadApiInventory() {
   const data = await apiRequest("/api/inventory");
   fieldDefinitions = Object.fromEntries(data.groups.map(group => [group.name, (group.fields || []).map(field => ({ ...field, showInDashboard: field.showInDashboard === true }))]));
-  items = (data.items || []).map(item => ({ ...item, detail: `${item.quantity} in stock`, price: "—", thumbnail: item.thumbnailUrl || fallbackImage, image: item.imageUrl || fallbackImage, originalImage: item.imageUrl || undefined }));
+  items = (data.items || []).map(item => ({ ...item, detail: `${item.quantity} in stock`, thumbnail: item.thumbnailUrl || fallbackImage, image: item.imageUrl || fallbackImage, originalImage: item.imageUrl || undefined }));
   selectedGroup = "All";
   renderGroupControls();
   renderItems();
@@ -252,7 +259,7 @@ function renderItems() {
     return items.indexOf(a) - items.indexOf(b);
   });
   grid.classList.toggle("list-view", currentView === "list");
-  grid.innerHTML = visible.length ? visible.map(item => `<article class="item-card" data-item-id="${item.id}"><button class="item-card-button" type="button" aria-label="Open ${escapeHtml(item.name)}"><div class="bottle-image"><img src="${escapeHtml(item.thumbnail || item.image)}" alt="${escapeHtml(item.name)}" loading="lazy"><span class="item-group">${escapeHtml(item.group)}</span></div><div class="card-body"><h3>${escapeHtml(item.name)}</h3><div class="card-meta"><span>${escapeHtml(item.detail)}</span><strong>${escapeHtml(item.price)}</strong></div>${renderDashboardFields(item) ? `<div class="dashboard-fields">${renderDashboardFields(item)}</div>` : ""}</div></button></article>`).join("") : '<div class="empty-state">No items found in this view.</div>';
+  grid.innerHTML = visible.length ? visible.map(item => `<article class="item-card" data-item-id="${item.id}"><button class="item-card-button" type="button" aria-label="Open ${escapeHtml(item.name)}"><div class="bottle-image"><img src="${escapeHtml(item.thumbnail || item.image)}" alt="${escapeHtml(item.name)}" loading="lazy"><span class="item-group">${escapeHtml(item.group)}</span></div><div class="card-body"><h3>${escapeHtml(item.name)}</h3><div class="card-meta"><span>${escapeHtml(item.detail)}</span></div>${renderDashboardFields(item) ? `<div class="dashboard-fields">${renderDashboardFields(item)}</div>` : ""}</div></button></article>`).join("") : '<div class="empty-state">No items found in this view.</div>';
   document.querySelector("#itemTotalLabel").textContent = visible.length;
 }
 function renderGroupControls() {
@@ -441,8 +448,9 @@ function renderDetail(item) {
     if (!value) return "";
     return `<div class="detail-field"><span>${escapeHtml(field.label)}</span><strong>${escapeHtml(formatFieldValue(field, value))}</strong></div>`;
   }).join("");
-  document.querySelector("#detailContent").innerHTML = `<p class="eyebrow">${escapeHtml(item.group)}</p><h2 id="detailTitle">${escapeHtml(item.name)}<span class="accent-dot">.</span></h2><p class="detail-subtitle">${escapeHtml(item.detail)} · ${escapeHtml(item.price)}</p><img class="detail-image" src="${escapeHtml(item.originalImage || item.image)}" alt="${escapeHtml(item.name)}"><div class="detail-fields">${details || '<p class="detail-empty">No custom values recorded for this item.</p>'}</div><div class="modal-actions"><button type="button" class="secondary-button" id="deleteItemButton">Delete item</button><button type="button" class="primary-button" id="editItemButton">Edit item <span>→</span></button></div>`;
+  document.querySelector("#detailContent").innerHTML = `<p class="eyebrow">${escapeHtml(item.group)}</p><h2 id="detailTitle">${escapeHtml(item.name)}<span class="accent-dot">.</span></h2><p class="detail-subtitle">${escapeHtml(item.detail)}</p><img class="detail-image" src="${escapeHtml(item.originalImage || item.image)}" alt="${escapeHtml(item.name)}"><div class="detail-fields">${details || '<p class="detail-empty">No custom values recorded for this item.</p>'}</div><div class="modal-actions"><button type="button" class="secondary-button" id="deleteItemButton">Delete item</button><button type="button" class="secondary-button" id="itemLogsButton">Logs</button><button type="button" class="primary-button" id="editItemButton">Edit item <span>→</span></button></div>`;
   document.querySelector("#editItemButton").addEventListener("click", () => { closeModal(detailModal); openItemEditor(item); });
+  document.querySelector("#itemLogsButton").addEventListener("click", () => showItemLogs(item));
   document.querySelector("#deleteItemButton").addEventListener("click", async () => {
     if (!window.confirm(`Delete ${item.name}?`)) return;
     if (useApiAuth) await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: "DELETE" });
@@ -450,6 +458,17 @@ function renderDetail(item) {
     items = items.filter(candidate => candidate.id !== item.id);
     persist(); closeModal(detailModal); renderGroupControls(); renderItems(); if (useApiAuth) await loadApiActivity();
   });
+}
+async function showItemLogs(item) {
+  try {
+    const logs = useApiAuth
+      ? (await apiRequest(`/api/activity?itemId=${encodeURIComponent(item.id)}`)).activity || []
+      : activity.filter(entry => entry.itemId === item.id);
+    document.querySelector("#detailContent").innerHTML = `<p class="eyebrow">${escapeHtml(item.group)}</p><h2 id="detailTitle">${escapeHtml(item.name)} logs<span class="accent-dot">.</span></h2><div class="item-log-list">${logs.length ? logs.map(renderActivityEntry).join("") : '<p class="detail-empty">No logs recorded for this item.</p>'}</div><div class="modal-actions"><button type="button" class="secondary-button" id="backToItemButton">Back to item</button></div>`;
+    document.querySelector("#backToItemButton").addEventListener("click", () => renderDetail(item));
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to load item logs.");
+  }
 }
 function createThumbnail(file) {
   return new Promise((resolve, reject) => {
@@ -628,6 +647,26 @@ document.querySelector("#activitySearchInput").addEventListener("input", async e
     return;
   }
   renderActivity();
+});
+document.querySelector("#activityList").addEventListener("click", event => {
+  const button = event.target.closest("[data-activity-item-id]");
+  if (!button) return;
+  const item = items.find(candidate => candidate.id === button.dataset.activityItemId);
+  if (item) {
+    document.querySelector("#activitySection").hidden = true;
+    document.querySelector(".inventory-section").hidden = false;
+    document.querySelector(".page-heading").hidden = false;
+    document.querySelectorAll(".main-nav .nav-item").forEach(navItem => navItem.classList.remove("active"));
+    document.querySelector(".main-nav .nav-item:first-child").classList.add("active");
+    renderDetail(item);
+    openModal(detailModal);
+  }
+});
+document.querySelector("#detailContent").addEventListener("click", event => {
+  const button = event.target.closest("[data-activity-item-id]");
+  if (!button) return;
+  const item = items.find(candidate => candidate.id === button.dataset.activityItemId);
+  if (item) renderDetail(item);
 });
 document.querySelector("#profileTrigger").addEventListener("click", () => {
   const dropdown = document.querySelector("#profileDropdown");
@@ -961,13 +1000,13 @@ document.querySelector("#itemForm").addEventListener("submit", async event => {
     let photo = pendingPhoto || {};
     if (file && !photo.thumbnail) photo = await createThumbnail(file);
     const existing = editingItemId && items.find(item => item.id === editingItemId);
-    const updated = { ...(existing || {}), id: existing?.id || createId(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, price: existing?.price || "—", image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
+    const updated = { ...(existing || {}), id: existing?.id || createId(), name: data.get("name"), group: data.get("group"), quantity: data.get("quantity") || 1, values, detail: `${data.get("quantity") || 1} in stock`, image: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, thumbnail: photo.thumbnail || existing?.thumbnail || existing?.image || fallbackImage, originalImage: photo.originalImage || existing?.originalImage };
     if (useApiAuth) {
       const payload = JSON.stringify({ name: updated.name, group: updated.group, quantity: updated.quantity, values: updated.values });
       const result = existing
         ? await apiRequest(`/api/items/${encodeURIComponent(existing.id)}`, { method: "PUT", body: payload })
         : await apiRequest("/api/items", { method: "POST", body: payload });
-      Object.assign(updated, result.item, { detail: `${result.item.quantity} in stock`, price: "—", thumbnail: fallbackImage, image: fallbackImage });
+      Object.assign(updated, result.item, { detail: `${result.item.quantity} in stock`, thumbnail: fallbackImage, image: fallbackImage });
       if (file) {
         const uploadData = new FormData();
         uploadData.append("image", file);

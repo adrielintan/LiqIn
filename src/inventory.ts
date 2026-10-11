@@ -52,13 +52,14 @@ async function recordItemActivity(userId: string, itemId: string, action: "added
 
 export async function listActivity(request: AuthenticatedRequest, response: Response): Promise<void> {
   const search = typeof request.query.search === "string" ? request.query.search.trim() : "";
+  const itemId = typeof request.query.itemId === "string" ? request.query.itemId : "";
   const result = await pool.query(
     `SELECT id, item_id AS "itemId", action, item_name AS "itemName", group_name AS "groupName", created_at AS "createdAt"
      FROM item_activity
-     WHERE user_id = $1 AND ($2 = '' OR item_name ILIKE '%' || $2 || '%' OR group_name ILIKE '%' || $2 || '%')
+     WHERE user_id = $1 AND ($2 = '' OR item_name ILIKE '%' || $2 || '%' OR group_name ILIKE '%' || $2 || '%') AND ($3 = '' OR item_id::text = $3)
      ORDER BY created_at DESC
      LIMIT 200`,
-    [userId(request), search]
+    [userId(request), search, itemId]
   );
   response.json({ activity: result.rows });
 }
