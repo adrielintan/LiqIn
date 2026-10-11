@@ -257,7 +257,13 @@ export async function updateGroup(request: AuthenticatedRequest, response: Respo
       const previousFieldsResult = await client.query("SELECT label, field_name AS name, field_type AS type, options FROM group_fields WHERE group_id = (SELECT id FROM groups WHERE user_id = $1 AND name = $2)", [userId(request), decodeURIComponent(String(request.params.name))]);
       const result = await client.query("UPDATE groups SET name = $1, updated_at = now() WHERE user_id = $2 AND name = $3 RETURNING id, name", [name, userId(request), decodeURIComponent(String(request.params.name))]);
       if (!result.rows[0]) throw new Error("Group not found.");
-      const warnings = await migrateGroupItemValues(client, result.rows[0].id, previousFieldsResult.rows as FieldDefinition[], fields as FieldDefinition[]);
+      const migratedFields = fields.map(field => ({
+        label: String(field.label),
+        name: String(field.fieldName),
+        type: String(field.fieldType),
+        options: Array.isArray(field.options) ? field.options as string[] : []
+      }));
+      const warnings = await migrateGroupItemValues(client, result.rows[0].id, previousFieldsResult.rows as FieldDefinition[], migratedFields);
       await replaceFields(client, result.rows[0].id, fields);
       await client.query("COMMIT");
       response.json({ group: { ...result.rows[0], fields }, warnings });
