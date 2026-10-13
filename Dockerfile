@@ -13,8 +13,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-COPY index.html app.js styles.css ./
-RUN mkdir -p public && cp index.html app.js styles.css public/
+COPY index.html app.js styles.css favicon.png ./
+RUN mkdir -p public && cp index.html app.js styles.css favicon.png public/
 
 RUN mkdir -p /var/lib/liqin/uploads
 EXPOSE 3000
